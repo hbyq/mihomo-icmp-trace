@@ -1,0 +1,15 @@
+{
+  "status": "pass",
+  "checked_files_and_archive_members": 1244,
+  "private_or_new_credential_findings": [],
+  "unchanged_public_upstream_fixture_pattern_matches": 6,
+  "excluded_material": [
+    "raw logs",
+    "packet captures",
+    "environment files",
+    "live proxy configuration",
+    "private repository history"
+  ],
+  "binary_sha256": "89e595974d867be6e9f9262a2e429c986114fa3fc57ccdec3eba228ca1ad6ec7",
+  "scope": "Publication privacy and credential scan; not a guarantee of absence of all software vulnerabilities."
+}

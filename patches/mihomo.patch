@@ -1,0 +1,467 @@
+diff --git a/config/config.go b/config/config.go
+index 5a66ce6..60c3900 100644
+--- a/config/config.go
++++ b/config/config.go
+@@ -314,6 +314,7 @@ type RawTun struct {
+ 	UDPTimeout                            int64          `yaml:"udp-timeout" json:"udp-timeout,omitempty"`
+ 	ICMPTimeout                           int64          `yaml:"icmp-timeout" json:"icmp-timeout,omitempty"`
+ 	DisableICMPForwarding                 bool           `yaml:"disable-icmp-forwarding" json:"disable-icmp-forwarding,omitempty"`
++	ICMPTrace                             bool           `yaml:"icmp-trace" json:"icmp-trace,omitempty"`
+ 	FileDescriptor                        int            `yaml:"file-descriptor" json:"file-descriptor"`
+ 
+ 	Inet4RouteAddress        []netip.Prefix `yaml:"inet4-route-address" json:"inet4-route-address,omitempty"`
+@@ -1683,6 +1684,9 @@ func parseIPV6(rawCfg *RawConfig) {
+ }
+ 
+ func parseTun(rawTun RawTun, dns *DNS, general *General) error {
++	if rawTun.ICMPTrace && rawTun.DisableICMPForwarding {
++		return fmt.Errorf("tun.icmp-trace conflicts with tun.disable-icmp-forwarding")
++	}
+ 	tunAddressPrefix := dns.FakeIPRange
+ 	if !tunAddressPrefix.IsValid() {
+ 		tunAddressPrefix = netip.MustParsePrefix("198.18.0.1/16")
+@@ -1733,6 +1737,7 @@ func parseTun(rawTun RawTun, dns *DNS, general *General) error {
+ 		UDPTimeout:                            rawTun.UDPTimeout,
+ 		ICMPTimeout:                           rawTun.ICMPTimeout,
+ 		DisableICMPForwarding:                 rawTun.DisableICMPForwarding,
++		ICMPTrace:                             rawTun.ICMPTrace,
+ 		FileDescriptor:                        rawTun.FileDescriptor,
+ 
+ 		Inet4RouteAddress:        rawTun.Inet4RouteAddress,
+diff --git a/config/icmp_trace_test.go b/config/icmp_trace_test.go
+new file mode 100644
+index 0000000..3f9b49e
+--- /dev/null
++++ b/config/icmp_trace_test.go
+@@ -0,0 +1,18 @@
++package config
++
++import "testing"
++
++func TestICMPTraceConfiguration(t *testing.T) {
++	for _, enabled := range []bool{false, true} {
++		var general General
++		if err := parseTun(RawTun{ICMPTrace: enabled}, &DNS{}, &general); err != nil {
++			t.Fatal(err)
++		}
++		if general.Tun.ICMPTrace != enabled {
++			t.Fatal("ICMP trace flag lost during config conversion")
++		}
++	}
++	if err := parseTun(RawTun{ICMPTrace: true, DisableICMPForwarding: true}, &DNS{}, &General{}); err == nil {
++		t.Fatal("accepted mutually exclusive forwarding modes")
++	}
++}
+diff --git a/docs/config.yaml b/docs/config.yaml
+index b57f646..53369a7 100644
+--- a/docs/config.yaml
++++ b/docs/config.yaml
+@@ -132,6 +132,10 @@ profile: # 存储 select 选择记录
+ 
+ # Tun 配置
+ tun:
++  # Experimental local build only: preserve TTL/Hop Limit and forward real
++  # ICMP Echo/error responses for ping and ICMP traceroute. Default: false.
++  # icmp-trace: true
++  # Requires disable-icmp-forwarding: false. Does not proxy ICMP via nodes.
+   enable: false
+   stack: system # gvisor/mixed/mips
+   dns-hijack:
+diff --git a/go.mod b/go.mod
+index 9e95db1..1cf5fe1 100644
+--- a/go.mod
++++ b/go.mod
+@@ -149,3 +149,6 @@ require (
+ 
+ // for https://github.com/golang/protobuf/issues/1704
+ replace google.golang.org/protobuf => github.com/metacubex/protobuf-go v0.0.0-20260306035419-7ceee0674686
++
++// Local experimental ICMP diagnostic transport; remove to restore upstream.
++replace github.com/metacubex/sing-tun => ../sing-tun
+diff --git a/listener/config/icmp_trace_test.go b/listener/config/icmp_trace_test.go
+new file mode 100644
+index 0000000..449395c
+--- /dev/null
++++ b/listener/config/icmp_trace_test.go
+@@ -0,0 +1,12 @@
++package config
++
++import "testing"
++
++func TestICMPTraceRequiresListenerReload(t *testing.T) {
++	a := Tun{}
++	b := a
++	b.ICMPTrace = true
++	if a.Equal(b) {
++		t.Fatal("ICMP trace toggle would not recreate the listener")
++	}
++}
+diff --git a/listener/config/tun.go b/listener/config/tun.go
+index f6ca47f..4f84c14 100644
+--- a/listener/config/tun.go
++++ b/listener/config/tun.go
+@@ -53,6 +53,7 @@ type Tun struct {
+ 	UDPTimeout                            int64          `yaml:"udp-timeout" json:"udp-timeout,omitempty"`
+ 	ICMPTimeout                           int64          `yaml:"icmp-timeout" json:"icmp-timeout,omitempty"`
+ 	DisableICMPForwarding                 bool           `yaml:"disable-icmp-forwarding" json:"disable-icmp-forwarding,omitempty"`
++	ICMPTrace                             bool           `yaml:"icmp-trace" json:"icmp-trace,omitempty"`
+ 	FileDescriptor                        int            `yaml:"file-descriptor" json:"file-descriptor"`
+ 
+ 	Inet4RouteAddress        []netip.Prefix `yaml:"inet4-route-address" json:"inet4-route-address,omitempty"`
+@@ -208,6 +209,9 @@ func (t *Tun) Equal(other Tun) bool {
+ 	if t.ICMPTimeout != other.ICMPTimeout {
+ 		return false
+ 	}
++	if t.ICMPTrace != other.ICMPTrace {
++		return false
++	}
+ 	if t.DisableICMPForwarding != other.DisableICMPForwarding {
+ 		return false
+ 	}
+diff --git a/listener/inbound/tun.go b/listener/inbound/tun.go
+index 477eb06..28d47d8 100644
+--- a/listener/inbound/tun.go
++++ b/listener/inbound/tun.go
+@@ -54,6 +54,7 @@ type TunOption struct {
+ 	UDPTimeout                            int64          `inbound:"udp-timeout,omitempty"`
+ 	ICMPTimeout                           int64          `inbound:"icmp-timeout,omitempty"`
+ 	DisableICMPForwarding                 bool           `inbound:"disable-icmp-forwarding,omitempty"`
++	ICMPTrace                             bool           `inbound:"icmp-trace,omitempty"`
+ 	FileDescriptor                        int            `inbound:"file-descriptor,omitempty"`
+ 
+ 	Inet4RouteAddress        []netip.Prefix `inbound:"inet4-route-address,omitempty"`
+@@ -135,6 +136,7 @@ func NewTun(options *TunOption) (*Tun, error) {
+ 			UDPTimeout:                            options.UDPTimeout,
+ 			ICMPTimeout:                           options.ICMPTimeout,
+ 			DisableICMPForwarding:                 options.DisableICMPForwarding,
++			ICMPTrace:                             options.ICMPTrace,
+ 			FileDescriptor:                        options.FileDescriptor,
+ 
+ 			Inet4RouteAddress:        options.Inet4RouteAddress,
+diff --git a/listener/sing_tun/icmp_trace.go b/listener/sing_tun/icmp_trace.go
+new file mode 100644
+index 0000000..6c55250
+--- /dev/null
++++ b/listener/sing_tun/icmp_trace.go
+@@ -0,0 +1,117 @@
++package sing_tun
++
++import (
++	"context"
++	"errors"
++	"net"
++	"sync"
++	"sync/atomic"
++	"time"
++
++	"github.com/metacubex/mihomo/log"
++	tun "github.com/metacubex/sing-tun"
++	"github.com/metacubex/sing/common/buf"
++)
++
++// DNS resolution and raw-socket setup must not block the TUN read loop. Return
++// a real destination immediately, even on failure: a nil destination makes the
++// upstream stacks fall back to synthetic Echo replies.
++type asyncICMPTrace struct {
++	mu       sync.Mutex
++	closed   atomic.Bool
++	queue    chan *buf.Buffer
++	done     chan struct{}
++	cancel   context.CancelFunc
++	delegate tun.DirectRouteDestination
++}
++
++func newAsyncICMPTrace(create func(context.Context) (tun.DirectRouteDestination, error), timeout time.Duration) *asyncICMPTrace {
++	ctx, cancel := context.WithCancel(context.Background())
++	d := &asyncICMPTrace{queue: make(chan *buf.Buffer, 32), done: make(chan struct{}), cancel: cancel}
++	if timeout <= 0 {
++		timeout = 30 * time.Second
++	}
++	go func() {
++		defer func() {
++			d.Close()
++			for {
++				select {
++				case packet := <-d.queue:
++					packet.Release()
++				default:
++					return
++				}
++			}
++		}()
++		delegate, err := create(ctx)
++		if err != nil {
++			log.Warnln("[ICMP TRACE] setup failed (no synthetic reply): %v", err)
++			return
++		}
++		defer delegate.Close()
++		d.mu.Lock()
++		d.delegate = delegate
++		d.mu.Unlock()
++		timer := time.NewTimer(timeout)
++		defer timer.Stop()
++		for {
++			select {
++			case <-d.done:
++				return
++			case <-timer.C:
++				return
++			case packet := <-d.queue:
++				if d.closed.Load() {
++					packet.Release()
++					return
++				}
++				if err := delegate.WritePacket(packet); err != nil {
++					log.Warnln("[ICMP TRACE] send failed (no synthetic reply): %v", err)
++				}
++				if delegate.IsClosed() {
++					return
++				}
++				if !timer.Stop() {
++					select {
++					case <-timer.C:
++					default:
++					}
++				}
++				timer.Reset(timeout)
++			}
++		}
++	}()
++	return d
++}
++
++func (d *asyncICMPTrace) WritePacket(packet *buf.Buffer) error {
++	d.mu.Lock()
++	defer d.mu.Unlock()
++	if d.closed.Load() {
++		packet.Release()
++		return net.ErrClosed
++	}
++	select {
++	case d.queue <- packet:
++		return nil
++	default:
++		packet.Release()
++		return errors.New("ICMP trace startup/send queue is full")
++	}
++}
++
++func (d *asyncICMPTrace) Close() error {
++	d.mu.Lock()
++	defer d.mu.Unlock()
++	if !d.closed.Swap(true) {
++		d.cancel()
++		close(d.done)
++	}
++	return nil
++}
++
++func (d *asyncICMPTrace) IsClosed() bool {
++	d.mu.Lock()
++	defer d.mu.Unlock()
++	return d.closed.Load() || (d.delegate != nil && d.delegate.IsClosed())
++}
+diff --git a/listener/sing_tun/icmp_trace_test.go b/listener/sing_tun/icmp_trace_test.go
+new file mode 100644
+index 0000000..cb8b36b
+--- /dev/null
++++ b/listener/sing_tun/icmp_trace_test.go
+@@ -0,0 +1,105 @@
++package sing_tun
++
++import (
++	"context"
++	"errors"
++	"sync/atomic"
++	"testing"
++	"time"
++
++	tun "github.com/metacubex/sing-tun"
++	"github.com/metacubex/sing/common/buf"
++)
++
++type testTraceDelegate struct {
++	packets chan string
++	closed  atomic.Bool
++}
++
++func (d *testTraceDelegate) WritePacket(b *buf.Buffer) error {
++	defer b.Release()
++	d.packets <- string(b.Bytes())
++	return nil
++}
++func (d *testTraceDelegate) Close() error   { d.closed.Store(true); return nil }
++func (d *testTraceDelegate) IsClosed() bool { return d.closed.Load() }
++
++func TestAsyncICMPTraceDoesNotBlockTUNOnDNS(t *testing.T) {
++	ready := make(chan struct{})
++	delegate := &testTraceDelegate{packets: make(chan string, 2)}
++	d := newAsyncICMPTrace(func(ctx context.Context) (tun.DirectRouteDestination, error) {
++		select {
++		case <-ready:
++			return delegate, nil
++		case <-ctx.Done():
++			return nil, ctx.Err()
++		}
++	}, time.Second)
++	defer d.Close()
++	completed := make(chan error, 1)
++	go func() { completed <- d.WritePacket(buf.As([]byte("first probe")).ToOwned()) }()
++	select {
++	case err := <-completed:
++		if err != nil {
++			t.Fatal(err)
++		}
++	case <-time.After(time.Second):
++		t.Fatal("TUN caller blocked on DNS")
++	}
++	close(ready)
++	select {
++	case packet := <-delegate.packets:
++		if packet != "first probe" {
++			t.Fatal("probe changed")
++		}
++	case <-time.After(time.Second):
++		t.Fatal("queued probe lost")
++	}
++	delegate.Close()
++	if !d.IsClosed() {
++		t.Fatal("closed raw socket would be reused")
++	}
++}
++
++func TestAsyncICMPTraceSetupFailureNeverReturnsNilDestination(t *testing.T) {
++	d := newAsyncICMPTrace(func(context.Context) (tun.DirectRouteDestination, error) {
++		return nil, errors.New("DNS/raw socket failure")
++	}, time.Second)
++	if d == nil {
++		t.Fatal("nil permits synthetic ping fallback")
++	}
++	defer d.Close()
++	deadline := time.Now().Add(time.Second)
++	for !d.IsClosed() && time.Now().Before(deadline) {
++		time.Sleep(time.Millisecond)
++	}
++	if !d.IsClosed() {
++		t.Fatal("failed destination remained healthy")
++	}
++	if err := d.WritePacket(buf.As([]byte("late probe")).ToOwned()); err == nil {
++		t.Fatal("failed destination accepted a packet")
++	}
++}
++
++func TestAsyncICMPTraceCancelAndBoundQueue(t *testing.T) {
++	exited := make(chan struct{})
++	d := newAsyncICMPTrace(func(ctx context.Context) (tun.DirectRouteDestination, error) {
++		<-ctx.Done()
++		close(exited)
++		return nil, ctx.Err()
++	}, time.Second)
++	for i := 0; i < 32; i++ {
++		if err := d.WritePacket(buf.As([]byte("pending")).ToOwned()); err != nil {
++			t.Fatal(err)
++		}
++	}
++	if err := d.WritePacket(buf.As([]byte("overflow")).ToOwned()); err == nil {
++		t.Fatal("startup queue is unbounded")
++	}
++	d.Close()
++	select {
++	case <-exited:
++	case <-time.After(time.Second):
++		t.Fatal("DNS setup was not cancelled")
++	}
++}
+diff --git a/listener/sing_tun/prepare.go b/listener/sing_tun/prepare.go
+index e97771c..48add0e 100644
+--- a/listener/sing_tun/prepare.go
++++ b/listener/sing_tun/prepare.go
+@@ -2,6 +2,7 @@ package sing_tun
+ 
+ import (
+ 	"context"
++	"fmt"
+ 	"net/netip"
+ 	"time"
+ 
+@@ -18,6 +19,50 @@ import (
+ func (h *ListenerHandler) PrepareConnection(network string, source M.Socksaddr, destination M.Socksaddr, routeContext tun.DirectRouteContext, timeout time.Duration) (tun.DirectRouteDestination, error) {
+ 	switch network {
+ 	case N.NetworkICMP: // our fork only send those type to PrepareConnection now
++		if h.ICMPTrace {
++			return newAsyncICMPTrace(func(ctx context.Context) (tun.DirectRouteDestination, error) {
++				if h.DisableICMPForwarding {
++					return nil, fmt.Errorf("icmp-trace conflicts with disable-icmp-forwarding")
++				}
++				target := destination.Addr
++				if resolver.IsFakeIP(target) {
++					host, found := resolver.FindHostByIP(target)
++					if !found {
++						return nil, fmt.Errorf("ICMP trace: no domain mapping for %s", target)
++					}
++					ctx, cancel := context.WithTimeout(ctx, resolver.DefaultDNSTimeout)
++					defer cancel()
++					r := resolver.DirectHostResolver
++					if r == nil {
++						r = resolver.DefaultResolver
++					}
++					var ips []netip.Addr
++					var err error
++					if target.Is4() {
++						ips, err = resolver.LookupIPv4WithResolver(ctx, host, r)
++					} else {
++						ips, err = resolver.LookupIPv6WithResolver(ctx, host, r)
++					}
++					if err != nil {
++						return nil, fmt.Errorf("ICMP trace resolve %s: %w", host, err)
++					}
++					target = netip.Addr{}
++					for _, ip := range ips {
++						if !resolver.IsFakeIP(ip) && !h.skipPingForwardingByAddr(ip) {
++							target = ip
++							break
++						}
++					}
++					if !target.IsValid() {
++						return nil, fmt.Errorf("ICMP trace: no real address for %s", host)
++					}
++				} else if h.skipPingForwardingByAddr(target) {
++					return nil, fmt.Errorf("ICMP trace: refusing TUN-local target %s", target)
++				}
++				log.Infoln("[ICMP TRACE] %s --> %s (real target %s) using DIRECT", source, destination, target)
++				return ping.ConnectTraceDestination(ctx, log.SingLogger, dialer.ICMPControl(target), target, destination.Addr, routeContext, timeout)
++			}, timeout), nil
++		}
+ 		if h.DisableICMPForwarding || h.skipPingForwardingByAddr(destination.Addr) { // skip if ICMP handling is disabled or other condition
+ 			log.Infoln("[ICMP] %s %s --> %s using fake ping echo", network, source, destination)
+ 			return nil, nil
+diff --git a/listener/sing_tun/server.go b/listener/sing_tun/server.go
+index 1e9527e..4dbe3fd 100644
+--- a/listener/sing_tun/server.go
++++ b/listener/sing_tun/server.go
+@@ -73,6 +73,7 @@ type ListenerHandler struct {
+ 	Inet4Address          []netip.Prefix
+ 	Inet6Address          []netip.Prefix
+ 	DisableICMPForwarding bool
++	ICMPTrace             bool
+ }
+ 
+ var emptyAddressSet = []*netipx.IPSet{{}}
+@@ -134,6 +135,9 @@ func checkTunName(tunName string) (ok bool) {
+ }
+ 
+ func New(options LC.Tun, tunnel C.Tunnel, additions ...inbound.Addition) (l *Listener, err error) {
++	if options.ICMPTrace && options.DisableICMPForwarding {
++		return nil, fmt.Errorf("tun.icmp-trace conflicts with tun.disable-icmp-forwarding")
++	}
+ 	if len(additions) == 0 {
+ 		additions = []inbound.Addition{
+ 			inbound.WithInName("DEFAULT-TUN"),
+@@ -316,6 +320,7 @@ func New(options LC.Tun, tunnel C.Tunnel, additions ...inbound.Addition) (l *Lis
+ 		Inet4Address:          options.Inet4Address,
+ 		Inet6Address:          options.Inet6Address,
+ 		DisableICMPForwarding: options.DisableICMPForwarding,
++		ICMPTrace:             options.ICMPTrace,
+ 	}
+ 	l = &Listener{
+ 		closed:  false,

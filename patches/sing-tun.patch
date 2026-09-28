@@ -1,0 +1,755 @@
+diff --git a/ping/trace.go b/ping/trace.go
+new file mode 100644
+index 0000000..02b70b5
+--- /dev/null
++++ b/ping/trace.go
+@@ -0,0 +1,398 @@
++package ping
++
++// Experimental transparent Echo/ICMP-error forwarding. Unlike the legacy ping
++// connection, this uses an unconnected raw socket so errors from intermediate
++// routers can arrive, preserves each probe's hop budget, and matches errors by
++// their quoted request rather than treating the error header as an Echo header.
++
++import (
++	"context"
++	"encoding/binary"
++	"errors"
++	"net"
++	"net/netip"
++	"runtime"
++	"sync"
++	"sync/atomic"
++	"time"
++
++	tun "github.com/metacubex/sing-tun"
++	"github.com/metacubex/sing/common/buf"
++	"github.com/metacubex/sing/common/control"
++	"github.com/metacubex/sing/common/logger"
++	"golang.org/x/net/ipv4"
++	"golang.org/x/net/ipv6"
++)
++
++// IDs are reserved across all destinations: unconnected raw sockets may receive
++// the same packet. Never deliver another session's reply on an ID collision.
++var traceIDs = struct {
++	sync.Mutex
++	used  [65536]bool
++	next  uint16
++	count int
++}{}
++
++func reserveTraceID() (uint16, error) {
++	traceIDs.Lock()
++	defer traceIDs.Unlock()
++	if traceIDs.count >= 4096 {
++		return 0, errors.New("ICMP trace pending-probe limit reached")
++	}
++	for {
++		traceIDs.next++
++		if !traceIDs.used[traceIDs.next] {
++			traceIDs.used[traceIDs.next] = true
++			traceIDs.count++
++			return traceIDs.next, nil
++		}
++	}
++}
++
++func releaseTraceID(id uint16) {
++	traceIDs.Lock()
++	if traceIDs.used[id] {
++		traceIDs.used[id] = false
++		traceIDs.count--
++	}
++	traceIDs.Unlock()
++}
++
++type traceProbe struct {
++	// Original IP header and first eight ICMP bytes, enough to restore an error
++	// quote without retaining arbitrarily large application payloads.
++	header   []byte
++	source   netip.Addr
++	target   netip.Addr
++	sequence uint16
++	expires  time.Time
++}
++
++type TraceDestination struct {
++	conn          *net.IPConn
++	target        netip.Addr
++	visibleTarget netip.Addr
++	context       tun.DirectRouteContext
++	logger        logger.ContextLogger
++	ctx           context.Context
++	timeout       time.Duration
++	closed        atomic.Bool
++	writeMu       sync.Mutex
++	mu            sync.Mutex
++	probes        map[uint16]traceProbe
++}
++
++func ConnectTraceDestination(ctx context.Context, log logger.ContextLogger, socketControl control.Func,
++	target, visibleTarget netip.Addr, routeContext tun.DirectRouteContext, timeout time.Duration,
++) (tun.DirectRouteDestination, error) {
++	if !target.IsValid() || target.Is4() != visibleTarget.Is4() || routeContext == nil {
++		return nil, errors.New("invalid ICMP trace destination")
++	}
++	network, bind := "ip4:icmp", "0.0.0.0"
++	if target.Is6() {
++		network, bind = "ip6:ipv6-icmp", "::"
++	}
++	lc := net.ListenConfig{Control: socketControl}
++	packetConn, err := lc.ListenPacket(ctx, network, bind)
++	if err != nil {
++		return nil, err
++	}
++	conn, ok := packetConn.(*net.IPConn)
++	if !ok {
++		packetConn.Close()
++		return nil, errors.New("ICMP trace requires an IP socket")
++	}
++	if target.Is6() {
++		if err = enableTraceIPv6Control(conn); err != nil {
++			conn.Close()
++			return nil, err
++		}
++	}
++	if timeout <= 0 {
++		timeout = 30 * time.Second
++	}
++	d := &TraceDestination{conn: conn, target: target, visibleTarget: visibleTarget, context: routeContext,
++		logger: log, ctx: ctx, timeout: timeout, probes: make(map[uint16]traceProbe)}
++	go d.readLoop()
++	return d, nil
++}
++
++// traceIP accepts a truncated ICMP quote but never a truncated IP header. IPv6
++// extension headers and IP fragments are deliberately rejected in this prototype.
++func traceIP(packet []byte, quoted bool) (offset int, source, target netip.Addr, err error) {
++	bad := errors.New("unsupported or truncated ICMP trace IP packet")
++	if len(packet) < 20 {
++		return 0, source, target, bad
++	}
++	switch packet[0] >> 4 {
++	case 4:
++		offset = int(packet[0]&15) * 4
++		length := int(binary.BigEndian.Uint16(packet[2:4]))
++		if offset < 20 || len(packet) < offset+8 || length < offset+8 || (!quoted && length != len(packet)) || packet[9] != 1 || binary.BigEndian.Uint16(packet[6:8])&0x3fff != 0 {
++			return 0, source, target, bad
++		}
++		source = netip.AddrFrom4([4]byte(packet[12:16]))
++		target = netip.AddrFrom4([4]byte(packet[16:20]))
++	case 6:
++		offset = 40
++		if len(packet) < 48 || packet[6] != 58 || (!quoted && int(binary.BigEndian.Uint16(packet[4:6]))+40 != len(packet)) || binary.BigEndian.Uint16(packet[4:6]) < 8 {
++			return 0, source, target, bad
++		}
++		source = netip.AddrFrom16([16]byte(packet[8:24]))
++		target = netip.AddrFrom16([16]byte(packet[24:40]))
++	default:
++		return 0, source, target, bad
++	}
++	return
++}
++
++func traceChecksum(data []byte) uint16 {
++	var sum uint32
++	for len(data) >= 2 {
++		sum += uint32(binary.BigEndian.Uint16(data))
++		data = data[2:]
++	}
++	if len(data) == 1 {
++		sum += uint32(data[0]) << 8
++	}
++	for sum>>16 != 0 {
++		sum = (sum & 0xffff) + (sum >> 16)
++	}
++	return ^uint16(sum)
++}
++
++func traceChecksums(packet []byte, offset int) {
++	icmp := packet[offset:]
++	icmp[2], icmp[3] = 0, 0
++	if packet[0]>>4 == 4 {
++		packet[10], packet[11] = 0, 0
++		binary.BigEndian.PutUint16(packet[10:12], traceChecksum(packet[:offset]))
++		binary.BigEndian.PutUint16(icmp[2:4], traceChecksum(icmp))
++	} else {
++		pseudo := make([]byte, 40+len(icmp))
++		copy(pseudo, packet[8:40])
++		binary.BigEndian.PutUint32(pseudo[32:36], uint32(len(icmp)))
++		pseudo[39] = 58
++		copy(pseudo[40:], icmp)
++		binary.BigEndian.PutUint16(icmp[2:4], traceChecksum(pseudo))
++	}
++}
++
++func (d *TraceDestination) expireLocked(now time.Time) {
++	for id, probe := range d.probes {
++		if !now.Before(probe.expires) {
++			delete(d.probes, id)
++			releaseTraceID(id)
++		}
++	}
++}
++
++func (d *TraceDestination) WritePacket(packet *buf.Buffer) error {
++	defer packet.Release()
++	p := packet.Bytes()
++	off, source, target, err := traceIP(p, false)
++	if err != nil {
++		return err
++	}
++	echoType, hop := byte(8), int(p[8])
++	if target.Is6() {
++		echoType, hop = 128, int(p[7])
++	}
++	if target != d.visibleTarget || p[off] != echoType || p[off+1] != 0 || hop == 0 || (target.Is4() && off != 20) {
++		return errors.New("ICMP trace supports unfragmented Echo requests without IP options only")
++	}
++	d.writeMu.Lock()
++	defer d.writeMu.Unlock()
++	if d.closed.Load() {
++		return net.ErrClosed
++	}
++	// TTL is a socket option. Serialize setting it with sending the packet, so
++	// simultaneous probes with different TTLs cannot race each other.
++	if target.Is4() {
++		err = ipv4.NewPacketConn(d.conn).SetTTL(hop)
++	} else {
++		err = ipv6.NewPacketConn(d.conn).SetHopLimit(hop)
++	}
++	if err != nil {
++		return err
++	}
++	d.mu.Lock()
++	d.expireLocked(time.Now())
++	id, err := reserveTraceID()
++	if err != nil {
++		d.mu.Unlock()
++		return err
++	}
++	probe := traceProbe{header: append([]byte(nil), p[:off+8]...), source: source, target: target,
++		sequence: binary.BigEndian.Uint16(p[off+6 : off+8]), expires: time.Now().Add(d.timeout)}
++	d.probes[id] = probe
++	d.mu.Unlock()
++	payload := append([]byte(nil), p[off:]...)
++	binary.BigEndian.PutUint16(payload[4:6], id)
++	payload[2], payload[3] = 0, 0
++	if target.Is4() {
++		binary.BigEndian.PutUint16(payload[2:4], traceChecksum(payload))
++	}
++	// The IPv6 raw socket computes its checksum using the real egress source.
++	_, err = d.conn.WriteToIP(payload, &net.IPAddr{IP: net.IP(d.target.AsSlice()), Zone: d.target.Zone()})
++	if err != nil {
++		d.mu.Lock()
++		delete(d.probes, id)
++		releaseTraceID(id)
++		d.mu.Unlock()
++	}
++	return err
++}
++
++// restoreTraceReply validates the echoed request before changing any packet.
++// Intermediate-router source addresses and error type/code/MTU stay intact.
++func restoreTraceReply(packet []byte, realTarget netip.Addr, lookup func(uint16, uint16) (traceProbe, bool)) ([]byte, bool) {
++	off, router, _, err := traceIP(packet, false)
++	if err != nil {
++		return nil, false
++	}
++	icmp := packet[off:]
++	echo, isError := false, false
++	if realTarget.Is4() {
++		echo = icmp[0] == 0 && icmp[1] == 0
++		isError = icmp[0] == 3 || icmp[0] == 11 || icmp[0] == 12
++	} else {
++		echo = icmp[0] == 129 && icmp[1] == 0
++		isError = icmp[0] >= 1 && icmp[0] <= 4
++	}
++	var id, sequence uint16
++	var quoted []byte
++	var qoff int
++	if echo {
++		if router != realTarget {
++			return nil, false
++		}
++		id, sequence = binary.BigEndian.Uint16(icmp[4:6]), binary.BigEndian.Uint16(icmp[6:8])
++	} else if isError {
++		quoted = icmp[8:]
++		var quotedTarget netip.Addr
++		qoff, _, quotedTarget, err = traceIP(quoted, true)
++		if err != nil || quotedTarget != realTarget {
++			return nil, false
++		}
++		expectedType := byte(8)
++		if realTarget.Is6() {
++			expectedType = 128
++		}
++		if quoted[qoff] != expectedType || quoted[qoff+1] != 0 {
++			return nil, false
++		}
++		id, sequence = binary.BigEndian.Uint16(quoted[qoff+4:qoff+6]), binary.BigEndian.Uint16(quoted[qoff+6:qoff+8])
++	} else {
++		return nil, false
++	}
++	probe, ok := lookup(id, sequence)
++	if !ok {
++		return nil, false
++	}
++	if realTarget.Is4() {
++		copy(packet[16:20], probe.source.AsSlice())
++		if echo {
++			copy(packet[12:16], probe.target.AsSlice())
++		} else {
++			copy(quoted[12:16], probe.source.AsSlice())
++			copy(quoted[16:20], probe.target.AsSlice())
++			quoted[10], quoted[11] = 0, 0
++			binary.BigEndian.PutUint16(quoted[10:12], traceChecksum(quoted[:qoff]))
++		}
++	} else {
++		copy(packet[24:40], probe.source.AsSlice())
++		if echo {
++			copy(packet[8:24], probe.target.AsSlice())
++		} else {
++			copy(quoted[8:24], probe.source.AsSlice())
++			copy(quoted[24:40], probe.target.AsSlice())
++		}
++	}
++	originalOffset := 20
++	if probe.target.Is6() {
++		originalOffset = 40
++	}
++	if echo {
++		copy(icmp[4:8], probe.header[originalOffset+4:originalOffset+8])
++	} else {
++		// Restore the original checksum as well as ID/sequence. Recomputing a
++		// checksum over a truncated quote would corrupt the quoted ICMP header.
++		copy(quoted[qoff+2:qoff+8], probe.header[originalOffset+2:originalOffset+8])
++	}
++	traceChecksums(packet, off)
++	return packet, true
++}
++
++func (d *TraceDestination) readLoop() {
++	defer d.Close()
++	data, oob := make([]byte, 65575), make([]byte, 1024)
++	for {
++		if err := d.conn.SetReadDeadline(time.Now().Add(d.timeout)); err != nil {
++			return
++		}
++		n, oobn, _, sender, err := d.conn.ReadMsgIP(data, oob)
++		if err != nil {
++			if !d.closed.Load() {
++				d.logger.DebugContext(d.ctx, "ICMP trace receive: ", err)
++			}
++			return
++		}
++		packet := append([]byte(nil), data[:n]...)
++		if d.target.Is6() {
++			if sender == nil || n < 8 {
++				continue
++			}
++			cm, err := parseIPv6ControlMessage(oob[:oobn])
++			if err != nil || cm.HopLimit <= 0 {
++				continue
++			}
++			packet = make([]byte, 40+n)
++			packet[0], packet[6], packet[7] = 0x60, 58, byte(cm.HopLimit)
++			binary.BigEndian.PutUint16(packet[4:6], uint16(n))
++			copy(packet[8:24], sender.IP.To16())
++			copy(packet[40:], data[:n])
++		} else if runtime.GOOS == "darwin" && len(packet) >= 20 {
++			// Darwin returns these two header fields in host byte order.
++			binary.BigEndian.PutUint16(packet[2:4], binary.LittleEndian.Uint16(packet[2:4])+uint16(packet[0]&15)*4)
++			binary.BigEndian.PutUint16(packet[6:8], binary.LittleEndian.Uint16(packet[6:8]))
++		}
++		d.mu.Lock()
++		d.expireLocked(time.Now())
++		restored, ok := restoreTraceReply(packet, d.target, func(id, sequence uint16) (traceProbe, bool) {
++			probe, exists := d.probes[id]
++			if !exists || sequence != probe.sequence {
++				return traceProbe{}, false
++			}
++			delete(d.probes, id)
++			releaseTraceID(id)
++			return probe, true
++		})
++		d.mu.Unlock()
++		if ok {
++			if err := d.context.WritePacket(restored); err != nil {
++				d.logger.DebugContext(d.ctx, "ICMP trace write back: ", err)
++			}
++		}
++	}
++}
++
++func (d *TraceDestination) Close() error {
++	if d.closed.Swap(true) {
++		return nil
++	}
++	d.writeMu.Lock()
++	defer d.writeMu.Unlock()
++	err := d.conn.Close()
++	d.mu.Lock()
++	for id := range d.probes {
++		releaseTraceID(id)
++		delete(d.probes, id)
++	}
++	d.mu.Unlock()
++	return err
++}
++
++func (d *TraceDestination) IsClosed() bool { return d.closed.Load() }
++
++var _ tun.DirectRouteDestination = (*TraceDestination)(nil)
+diff --git a/ping/trace_control_unix.go b/ping/trace_control_unix.go
+new file mode 100644
+index 0000000..139d004
+--- /dev/null
++++ b/ping/trace_control_unix.go
+@@ -0,0 +1,12 @@
++//go:build unix
++
++package ping
++
++import (
++	"golang.org/x/net/ipv6"
++	"net"
++)
++
++func enableTraceIPv6Control(conn *net.IPConn) error {
++	return ipv6.NewPacketConn(conn).SetControlMessage(ipv6.FlagHopLimit, true)
++}
+diff --git a/ping/trace_control_windows.go b/ping/trace_control_windows.go
+new file mode 100644
+index 0000000..5242b81
+--- /dev/null
++++ b/ping/trace_control_windows.go
+@@ -0,0 +1,21 @@
++package ping
++
++import (
++	"golang.org/x/sys/windows"
++	"net"
++)
++
++func enableTraceIPv6Control(conn *net.IPConn) error {
++	raw, err := conn.SyscallConn()
++	if err != nil {
++		return err
++	}
++	var socketErr error
++	err = raw.Control(func(fd uintptr) {
++		socketErr = windows.SetsockoptInt(windows.Handle(fd), windows.IPPROTO_IPV6, IPV6_HOPLIMIT, 1)
++	})
++	if err != nil {
++		return err
++	}
++	return socketErr
++}
+diff --git a/ping/trace_test.go b/ping/trace_test.go
+new file mode 100644
+index 0000000..d091af4
+--- /dev/null
++++ b/ping/trace_test.go
+@@ -0,0 +1,300 @@
++package ping
++
++import (
++	"context"
++	"encoding/binary"
++	"net"
++	"net/netip"
++	"os"
++	"sync"
++	"testing"
++	"time"
++
++	"github.com/metacubex/sing/common/buf"
++	"github.com/metacubex/sing/common/logger"
++)
++
++func testTracePacket(src, dst string, hop byte, body []byte) []byte {
++	s, d := netip.MustParseAddr(src), netip.MustParseAddr(dst)
++	off := 20
++	if s.Is6() {
++		off = 40
++	}
++	p := make([]byte, off+len(body))
++	if off == 20 {
++		p[0], p[8], p[9] = 0x45, hop, 1
++		binary.BigEndian.PutUint16(p[2:4], uint16(len(p)))
++		copy(p[12:16], s.AsSlice())
++		copy(p[16:20], d.AsSlice())
++	} else {
++		p[0], p[6], p[7] = 0x60, 58, hop
++		binary.BigEndian.PutUint16(p[4:6], uint16(len(body)))
++		copy(p[8:24], s.AsSlice())
++		copy(p[24:40], d.AsSlice())
++	}
++	copy(p[off:], body)
++	traceChecksums(p, off)
++	return p
++}
++
++func testTraceEcho(v6 bool, id, seq uint16, reply bool) []byte {
++	b := make([]byte, 16)
++	b[0] = 8
++	if v6 {
++		b[0] = 128
++	}
++	if reply {
++		if v6 {
++			b[0] = 129
++		} else {
++			b[0] = 0
++		}
++	}
++	binary.BigEndian.PutUint16(b[4:6], id)
++	binary.BigEndian.PutUint16(b[6:8], seq)
++	copy(b[8:], "trace123")
++	return b
++}
++
++func TestTraceRestore(t *testing.T) {
++	for _, v6 := range []bool{false, true} {
++		source, visible, real, router, egress := "198.18.0.1", "198.18.0.50", "203.0.113.20", "192.0.2.1", "192.0.2.10"
++		off := 20
++		if v6 {
++			source, visible, real, router, egress = "fd00::1", "fd00::50", "2001:db8:1::20", "2001:db8::1", "2001:db8::10"
++			off = 40
++		}
++		original := testTracePacket(source, visible, 2, testTraceEcho(v6, 123, 456, false))
++		probe := traceProbe{header: original[:off+8], source: netip.MustParseAddr(source), target: netip.MustParseAddr(visible), sequence: 456}
++		for _, kind := range []string{"echo", "time-exceeded", "unreachable", "packet-too-big", "parameter-problem"} {
++			t.Run(real+"/"+kind, func(t *testing.T) {
++				var packet []byte
++				if kind == "echo" {
++					packet = testTracePacket(real, egress, 51, testTraceEcho(v6, 789, 456, true))
++				} else {
++					quoted := testTracePacket(egress, real, 1, testTraceEcho(v6, 789, 456, false))
++					// Real ICMP errors commonly contain only the header + 8 bytes.
++					body := make([]byte, 8+off+8)
++					copy(body[8:], quoted[:off+8])
++					if v6 {
++						switch kind {
++						case "time-exceeded":
++							body[0] = 3
++						case "unreachable":
++							body[0] = 1
++						case "packet-too-big":
++							body[0] = 2
++							binary.BigEndian.PutUint32(body[4:8], 1280)
++						case "parameter-problem":
++							body[0] = 4
++							body[7] = 6
++						}
++					} else {
++						switch kind {
++						case "time-exceeded":
++							body[0] = 11
++						case "unreachable":
++							body[0], body[1] = 3, 1
++						case "packet-too-big":
++							body[0], body[1] = 3, 4
++							binary.BigEndian.PutUint16(body[6:8], 1400)
++						case "parameter-problem":
++							body[0] = 12
++							body[4] = 9
++						}
++					}
++					packet = testTracePacket(router, egress, 51, body)
++				}
++				before := append([]byte(nil), packet...)
++				result, ok := restoreTraceReply(packet, netip.MustParseAddr(real), func(id, seq uint16) (traceProbe, bool) { return probe, id == 789 && seq == 456 })
++				if !ok {
++					t.Fatal("valid response rejected")
++				}
++				_, gotSource, gotTarget, err := traceIP(result, false)
++				if err != nil || gotTarget.String() != source {
++					t.Fatalf("destination not restored: %v %v", gotTarget, err)
++				}
++				if kind == "echo" {
++					if gotSource.String() != visible || binary.BigEndian.Uint16(result[off+4:off+6]) != 123 {
++						t.Fatal("echo source/identifier not restored")
++					}
++				} else {
++					if gotSource.String() != router {
++						t.Fatal("intermediate router was replaced by final target")
++					}
++					for _, i := range []int{0, 1, 4, 5, 6, 7} {
++						if result[off+i] != before[off+i] {
++							t.Fatal("error type/code/MTU changed")
++						}
++					}
++					q := result[off+8:]
++					_, qs, qd, err := traceIP(q, true)
++					if err != nil || qs.String() != source || qd.String() != visible {
++						t.Fatal("quoted addresses not restored")
++					}
++					for i := 2; i < 8; i++ {
++						if q[off+i] != original[off+i] {
++							t.Fatal("quoted identifier/checksum corrupted")
++						}
++					}
++					if !v6 && traceChecksum(q[:off]) != 0 {
++						t.Fatal("invalid quoted IP checksum")
++					}
++				}
++				expected := append([]byte(nil), result...)
++				traceChecksums(expected, off)
++				if string(expected) != string(result) {
++					t.Fatal("invalid outer checksum")
++				}
++			})
++		}
++	}
++}
++
++func TestTraceRejectUnrelatedAndMalformed(t *testing.T) {
++	packet := testTracePacket("203.0.113.20", "192.0.2.10", 51, testTraceEcho(false, 789, 456, true))
++	for n := 0; n < len(packet); n++ {
++		if _, ok := restoreTraceReply(append([]byte(nil), packet[:n]...), netip.MustParseAddr("203.0.113.20"), func(uint16, uint16) (traceProbe, bool) {
++			t.Fatal("lookup on truncated input")
++			return traceProbe{}, false
++		}); ok {
++			t.Fatal("accepted truncation")
++		}
++	}
++	if _, ok := restoreTraceReply(packet, netip.MustParseAddr("203.0.113.21"), func(uint16, uint16) (traceProbe, bool) {
++		t.Fatal("lookup for wrong target")
++		return traceProbe{}, false
++	}); ok {
++		t.Fatal("accepted unrelated source")
++	}
++	if _, ok := restoreTraceReply(packet, netip.MustParseAddr("203.0.113.20"), func(uint16, uint16) (traceProbe, bool) { return traceProbe{}, false }); ok {
++		t.Fatal("accepted unknown probe")
++	}
++}
++
++type traceTestContext chan []byte
++
++func (c traceTestContext) WritePacket(p []byte) error { c <- append([]byte(nil), p...); return nil }
++
++func TestTraceLoopback(t *testing.T) {
++	for _, target := range []string{"127.0.0.1", "::1"} {
++		t.Run(target, func(t *testing.T) {
++			addr := netip.MustParseAddr(target)
++			c := make(traceTestContext, 16)
++			d, err := ConnectTraceDestination(context.Background(), logger.NOP(), nil, addr, addr, c, 2*time.Second)
++			if err != nil {
++				t.Skipf("raw ICMP socket unavailable: %v", err)
++			}
++			defer d.Close()
++			var wg sync.WaitGroup
++			for i := 1; i <= 8; i++ {
++				wg.Add(1)
++				go func(i int) {
++					defer wg.Done()
++					if err := d.WritePacket(buf.As(testTracePacket(target, target, byte(i), testTraceEcho(addr.Is6(), 123, uint16(i), false))).ToOwned()); err != nil {
++						t.Errorf("write: %v", err)
++					}
++				}(i)
++			}
++			wg.Wait()
++			seen := make(map[uint16]bool)
++			for i := 0; i < 8; i++ {
++				select {
++				case p := <-c:
++					off, _, _, err := traceIP(p, false)
++					if err != nil {
++						t.Fatal(err)
++					}
++					if binary.BigEndian.Uint16(p[off+4:off+6]) != 123 {
++						t.Fatal("wrong reply ID")
++					}
++					seq := binary.BigEndian.Uint16(p[off+6 : off+8])
++					if seen[seq] {
++						t.Fatal("duplicate reply")
++					}
++					seen[seq] = true
++				case <-time.After(3 * time.Second):
++					t.Fatal("no real loopback reply")
++				}
++			}
++		})
++	}
++}
++
++func TestTraceHopBudgetOnWire(t *testing.T) {
++	// An independent raw socket observes the actual IP TTL, not a mock setter.
++	sniffer, err := net.ListenIP("ip4:icmp", &net.IPAddr{IP: net.ParseIP("127.0.0.1")})
++	if err != nil {
++		t.Skipf("raw socket unavailable: %v", err)
++	}
++	defer sniffer.Close()
++	c := make(traceTestContext, 16)
++	addr := netip.MustParseAddr("127.0.0.1")
++	d, err := ConnectTraceDestination(context.Background(), logger.NOP(), nil, addr, addr, c, 2*time.Second)
++	if err != nil {
++		t.Fatal(err)
++	}
++	defer d.Close()
++	for _, hop := range []byte{1, 2, 7, 31} {
++		if err := d.WritePacket(buf.As(testTracePacket(addr.String(), addr.String(), hop, testTraceEcho(false, 333, uint16(hop), false))).ToOwned()); err != nil {
++			t.Fatal(err)
++		}
++	}
++	sniffer.SetReadDeadline(time.Now().Add(2 * time.Second))
++	seen := make(map[byte]bool)
++	for len(seen) < 4 {
++		b := make([]byte, 2048)
++		n, _, _, _, err := sniffer.ReadMsgIP(b, nil)
++		if err != nil {
++			t.Fatal(err)
++		}
++		off, _, _, err := traceIP(b[:n], false)
++		if err != nil || b[off] != 8 {
++			continue
++		}
++		seq := binary.BigEndian.Uint16(b[off+6 : off+8])
++		if seq != 1 && seq != 2 && seq != 7 && seq != 31 {
++			continue
++		}
++		if b[8] != byte(seq) {
++			t.Fatalf("TTL changed on wire: seq %d TTL %d", seq, b[8])
++		}
++		seen[b[8]] = true
++	}
++}
++
++func TestTraceRealRouter(t *testing.T) {
++	if os.Getenv("ICMP_TRACE_NETWORK_TEST") != "1" {
++		t.Skip("opt-in external TTL=1 probe")
++	}
++	addr := netip.MustParseAddr("1.1.1.1")
++	c := make(traceTestContext, 2)
++	d, err := ConnectTraceDestination(context.Background(), logger.NOP(), nil, addr, addr, c, 5*time.Second)
++	if err != nil {
++		t.Fatal(err)
++	}
++	defer d.Close()
++	if err = d.WritePacket(buf.As(testTracePacket("198.18.0.1", addr.String(), 1, testTraceEcho(false, 123, 456, false))).ToOwned()); err != nil {
++		t.Fatal(err)
++	}
++	select {
++	case p := <-c:
++		off, router, _, err := traceIP(p, false)
++		if err != nil {
++			t.Fatal(err)
++		}
++		if p[off] != 11 || router == addr {
++			t.Fatalf("expected intermediate TTL-exceeded, got type %d source %s", p[off], router)
++		}
++		t.Logf("real TTL=1 response from %s, original probe restored", router)
++	case <-time.After(6 * time.Second):
++		t.Fatal("no router response (network may filter ICMP)")
++	}
++}
++
++func FuzzTraceReply(f *testing.F) {
++	f.Add(testTracePacket("203.0.113.20", "192.0.2.10", 51, testTraceEcho(false, 789, 456, true)))
++	f.Fuzz(func(t *testing.T, p []byte) {
++		restoreTraceReply(p, netip.MustParseAddr("203.0.113.20"), func(uint16, uint16) (traceProbe, bool) { return traceProbe{}, false })
++	})
++}

@@ -1,0 +1,28 @@
+{
+  "implementation": "ICMP Echo/trace experimental forwarding",
+  "base": {
+    "mihomo": "v1.19.31",
+    "sing-tun": "v0.4.24"
+  },
+  "verified": {
+    "linux_mixed_ipv4_real_and_fake_ip": true,
+    "linux_mixed_ipv6_real_and_fake_ip": true,
+    "linux_gvisor_ipv4_real_and_fake_ip": true,
+    "linux_gvisor_ipv6_real_and_fake_ip": true,
+    "end_to_end_cases_passed": 16,
+    "transport_race_tests": true,
+    "async_race_tests": true,
+    "configuration_tests": true,
+    "windows_amd64_cross_compile": true
+  },
+  "not_yet_verified": [
+    "Windows runtime",
+    "Clash Verge service mode with Tailscale",
+    "macOS runtime"
+  ],
+  "limitations": [
+    "ICMP Echo probes only; not UDP/TCP traceroute",
+    "IPv4 options/fragments and IPv6 extension headers unsupported",
+    "Not a complete PMTU implementation"
+  ]
+}
