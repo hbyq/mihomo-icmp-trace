@@ -1,5 +1,5 @@
 89e595974d867be6e9f9262a2e429c986114fa3fc57ccdec3eba228ca1ad6ec7  mihomo-windows-amd64-icmp-trace-exp1.exe
-5b075ae13fb04a693761ee9929e60f304a87f1217b2cdefdbdd19ef30d593841  downloads/mihomo-icmp-trace-exp1-source.zip
+65d3c95d41950ba7fb56aec86839a4e67361f6ea313b316c89b3aa794ec13c3c  downloads/mihomo-icmp-trace-exp1-source.zip
 380b83bcdfe54c767fb9779775cbe2912d69902c13305f381f04e6f1e169209b  downloads/mihomo-windows-amd64-icmp-trace-exp1.zip
 ab9c76d938af8651c0f0ee94273c7d580fa4adea35a7b5476b616f6e9feb2f3a  patches/mihomo.patch
 b4c11d9798682536fa46626a984c0335c77fcf9b43a1d5dee6819ef8c9bd51d1  patches/sing-tun.patch
