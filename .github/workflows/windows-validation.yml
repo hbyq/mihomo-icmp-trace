@@ -13,6 +13,28 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  native-ip-options:
+    runs-on: windows-2022
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Inspect native Winsock IPv4 option set and reset
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force evidence | Out-Null
+          python scripts/windows/probe_ip_options.py | Tee-Object -FilePath evidence/ip-options.json
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - name: Upload native option evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows-native-ip-options
+          path: evidence/
+          retention-days: 7
+
   build:
     runs-on: windows-2022
     timeout-minutes: 30
