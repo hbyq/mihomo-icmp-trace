@@ -36,6 +36,8 @@ jobs:
         run: |
           mkdir -p evidence
           go version > evidence/go-version.txt
+          git config --get core.autocrlf > evidence/git-line-endings.txt || true
+          sha256sum patches/*.patch > evidence/patch-hashes.txt
           bash scripts/build.sh
           echo "kernel_built=true" >> "$GITHUB_OUTPUT"
       - name: Execute transport and configuration tests on Windows

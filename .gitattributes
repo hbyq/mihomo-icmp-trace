@@ -1,0 +1,3 @@
+# Unified patches and Bash scripts must keep Unix line endings on Windows.
+*.patch text eol=lf
+*.sh text eol=lf
