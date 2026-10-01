@@ -98,11 +98,60 @@ def normalize_echo(raw: bytes, probe: dict) -> bytes:
     return bytes(packet)
 
 
-def ipv4_packet(source: str, destination: str, body: bytes, identifier: int) -> bytes:
+def record_route_reply_options(options: bytes, target: str) -> tuple[bytes, list[str]]:
+    """Reflect RR and simulate the forward/return path per RFC 1122 3.2.2.6.
+
+    Existing records are preserved. Each synthetic router and the destination
+    append their address while slots remain; the receiving Windows host can
+    process the final inbound option itself. We never change option length.
+    """
+    result = bytearray(options)
+    recorded = []
+    offset = 0
+    seen_rr = False
+    while offset < len(result):
+        option_type = result[offset]
+        if option_type == 0:  # End of option list; preserve its padding.
+            break
+        if option_type == 1:  # No operation.
+            offset += 1
+            continue
+        if offset + 2 > len(result):
+            raise ValueError("truncated IPv4 option")
+        length = result[offset + 1]
+        if length < 2 or offset + length > len(result):
+            raise ValueError("invalid IPv4 option length")
+        if option_type == 7:
+            if seen_rr or length < 3 or (length - 3) % 4:
+                raise ValueError("invalid or duplicate IPv4 Record Route option")
+            seen_rr = True
+            pointer = result[offset + 2]
+            if pointer < 4 or pointer > length + 1 or (pointer - 4) % 4:
+                raise ValueError("invalid IPv4 Record Route pointer")
+            for address in (*HOPS, target, *reversed(HOPS)):
+                if pointer + 3 > length:
+                    break
+                start = offset + pointer - 1  # RFC 791 pointer is one-based.
+                result[start:start + 4] = socket.inet_aton(address)
+                pointer += 4
+            result[offset + 2] = pointer
+            recorded = [socket.inet_ntoa(result[start:start + 4])
+                        for start in range(offset + 3, offset + pointer - 1, 4)]
+        offset += length
+    return bytes(result), recorded
+
+
+def ipv4_packet(source: str, destination: str, body: bytes, identifier: int,
+                options: bytes = b"") -> bytes:
+    if len(options) > 40 or len(options) % 4:
+        raise ValueError("IPv4 options must be aligned and no longer than 40 bytes")
+    header_length = 20 + len(options)
     header = bytearray(struct.pack(
-        "!BBHHHBBH4s4s", 0x45, 0, 20 + len(body), identifier & 0xFFFF,
+        "!BBHHHBBH4s4s", 0x40 | (header_length // 4), 0,
+        header_length + len(body), identifier & 0xFFFF,
         0, 64, 1, 0, socket.inet_aton(source), socket.inet_aton(destination),
     ))
+    header.extend(options)
     struct.pack_into("!H", header, 10, checksum(bytes(header)))
     return bytes(header) + body
 
@@ -110,6 +159,7 @@ def ipv4_packet(source: str, destination: str, body: bytes, identifier: int) -> 
 def make_reply(raw: bytes, packet_identifier: int = 1) -> tuple[bytes, dict, bytes]:
     probe = parse_echo(raw)
     normalized = normalize_echo(raw, probe)
+    options, recorded = b"", []
     if probe["ttl"] <= 2:
         source = HOPS[max(1, probe["ttl"]) - 1]
         # RFC 792 minimum quote: complete original IP header + eight ICMP bytes.
@@ -118,18 +168,24 @@ def make_reply(raw: bytes, packet_identifier: int = 1) -> tuple[bytes, dict, byt
         body = bytearray(b"\x0b\x00\0\0\0\0\0\0" + quote)
     else:
         source = probe["destination"]
+        options, recorded = record_route_reply_options(normalized[20:probe["ihl"]], source)
         body = bytearray(normalized[probe["ihl"]:])
         body[0] = 0
         body[2:4] = b"\0\0"
     struct.pack_into("!H", body, 2, checksum(bytes(body)))
-    reply = ipv4_packet(source, probe["source"], bytes(body), packet_identifier)
+    reply = ipv4_packet(source, probe["source"], bytes(body), packet_identifier, options)
+    reply_ihl = (reply[0] & 15) * 4
     metadata = {
         "type": body[0], "code": body[1], "source": source,
         "destination": probe["source"], "length": len(reply),
-        "ip_checksum_valid": checksum(reply[:20]) == 0,
-        "icmp_checksum_valid": checksum(reply[20:]) == 0,
+        "ihl": reply_ihl,
+        "ip_checksum_valid": checksum(reply[:reply_ihl]) == 0,
+        "icmp_checksum_valid": checksum(reply[reply_ihl:]) == 0,
         "identifier": probe["identifier"], "sequence": probe["sequence"],
     }
+    if options:
+        metadata["ipv4_options_hex"] = options.hex()
+        metadata["record_route_addresses"] = recorded
     if body[0] == 11:
         metadata["quoted_ttl"] = normalized[8]
         metadata["quoted_ip_checksum_valid"] = checksum(normalized[:probe["ihl"]]) == 0
@@ -193,7 +249,35 @@ def self_test():
             pass
         else:
             raise AssertionError("malformed input accepted")
-    print("ICMP fixture packet self-test passed (13 valid cases + malformed packets)")
+    # BestTrace issues auxiliary RR pings. Reflect their full option allocation
+    # and populate the simulated round-trip route instead of returning IHL 20.
+    rr = bytes((7, 39, 4)) + bytes(36) + b"\0"
+    request = ipv4_packet("10.0.0.7", DEFAULT_TARGET, bytes(body), 12, rr)
+    reply, info, normalized = make_reply(request)
+    assert info["ihl"] == 60 and len(reply) == len(request)
+    assert info["ip_checksum_valid"] and info["icmp_checksum_valid"]
+    assert reply[20:23] == bytes((7, 39, 24))
+    assert info["record_route_addresses"] == [*HOPS, DEFAULT_TARGET, *reversed(HOPS)]
+    assert reply[60 + 4:60 + 8] == request[60 + 4:60 + 8]
+    assert reply[68:] == request[68:]
+    # Preserve prefilled records, respect a full RR allocation, and NOP alignment.
+    rr_existing = bytes((7, 39, 8)) + socket.inet_aton("198.51.100.9") + bytes(32) + b"\0"
+    updated, records = record_route_reply_options(rr_existing, DEFAULT_TARGET)
+    assert records == ["198.51.100.9", *HOPS, DEFAULT_TARGET, *reversed(HOPS)]
+    full = bytes((7, 7, 8)) + socket.inet_aton("198.51.100.9") + b"\0"
+    assert record_route_reply_options(full, DEFAULT_TARGET) == (full, ["198.51.100.9"])
+    aligned = b"\x01" + bytes((7, 7, 4)) + bytes(4)
+    updated, records = record_route_reply_options(aligned, DEFAULT_TARGET)
+    assert updated[:4] == bytes((1, 7, 7, 8)) and records == [HOPS[0]]
+    for invalid in [bytes((7, 39, 5)) + bytes(37), bytes((7, 38, 4)) + bytes(37),
+                    bytes((7, 39, 44)) + bytes(37), bytes((7, 39))]:
+        try:
+            record_route_reply_options(invalid, DEFAULT_TARGET)
+        except ValueError:
+            pass
+        else:
+            raise AssertionError("malformed RR accepted")
+    print("ICMP fixture self-test passed (13 ordinary packets, RR reflection/fill/bounds, malformed packets)")
 
 
 def run(args) -> int:

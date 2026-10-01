@@ -278,7 +278,8 @@ def main():
                     raise RuntimeError("capture_as_image returned no image")
                 path = out / f"{label}.png"
                 shot.save(path)
-                result["screenshot_paths"].append(str(path))
+                if str(path) not in result["screenshot_paths"]:
+                    result["screenshot_paths"].append(str(path))
                 extrema = shot.convert("RGB").getextrema()
                 screenshot_ok = min(shot.size) >= 100 and any(lo != hi for lo, hi in extrema)
                 if not screenshot_ok:
@@ -383,6 +384,36 @@ def main():
         # code (normal auto-close versus a crash), even after its PID disappears.
         trace_process_handle = ctypes.windll.kernel32.OpenProcess(
             0x1000, False, result["trace_pid"])
+        # On a cold Windows runner the trace controls appear before the map's
+        # embedded browser initializes. A native baseline previously crashed
+        # at 0x98f20 (virtual call near JS-string formatting), while its browser
+        # host was hidden. This is a hypothesis, not a packet-parser diagnosis.
+        # Wait for a real renderer rather than treating controls as UI readiness.
+        browser_started = time.monotonic()
+        browser_ready_since = None
+        result["browser_ready"] = False
+        while time.monotonic() - browser_started < 15:
+            if process_image(result["trace_pid"]) is None:
+                record_trace_exit()
+                raise RuntimeError("BestTrace trace process exited during browser initialization")
+            renderers = [control for control in trace_window.descendants()
+                         if safe(control.class_name, "") in
+                         {"Chrome_RenderWidgetHostHWND", "Internet Explorer_Server"} and
+                         safe(control.is_visible, False)]
+            if renderers:
+                if browser_ready_since is None:
+                    browser_ready_since = time.monotonic()
+                if time.monotonic() - browser_ready_since >= 0.5:
+                    result["browser_ready"] = True
+                    result["browser_render_controls"] = [describe(control) for control in renderers]
+                    break
+            else:
+                browser_ready_since = None
+            time.sleep(0.25)
+        result["browser_ready_wait_seconds"] = round(time.monotonic() - browser_started, 3)
+        if not result["browser_ready"]:
+            result["errors"].append("Embedded browser renderer did not become visible within 15s; actual trace still attempted")
+        evidence("browser-readiness", trace_window)
 
         vantage = by_id(trace_window, CONTROL_IDS["vantage"], "Button")
         vantage_text = safe(vantage.window_text, "") if vantage is not None else ""
@@ -453,6 +484,7 @@ def main():
         last_rows = initial_rows
         last_change = started
         seen_new_rows = False
+        partial_screenshot_saved = False
         table_errors = []
         while time.monotonic() < deadline:
             if process_image(result["trace_pid"]) is None:
@@ -470,6 +502,17 @@ def main():
                     seen_new_rows = True
                     last_rows = rows
                 result["rows"] = rows
+                if rows and not partial_screenshot_saved and target in addresses(
+                        "\n".join(row["text"] for row in rows)):
+                    # This evidence remains explicitly partial until the native
+                    # run reaches idle. Never reuse it to pass an app crash.
+                    partial_screenshot_saved = capture_screenshot("observed-results", trace_window)
+                    result["partial_screenshot_captured"] = partial_screenshot_saved
+                    (out / "observed-results.json").write_text(json.dumps({
+                        "trace_completed": False, "run_button_caption": caption,
+                        "rows": rows, "screenshot_captured": partial_screenshot_saved,
+                        "screenshot": str(out / "observed-results.png") if partial_screenshot_saved else None,
+                    }, ensure_ascii=False, indent=2), encoding="utf-8")
             except Exception as exc:
                 if len(table_errors) < 3:
                     table_errors.append(str(exc))

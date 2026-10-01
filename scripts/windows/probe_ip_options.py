@@ -50,3 +50,12 @@ for name, data, null, length in cases:
         item["after"] = get_options(sock)
         results.append(item)
 print(json.dumps(results, indent=2))
+
+# Require the production set/reset contract while retaining rejected variants
+# in the evidence for diagnosing platform differences.
+by_name = {item["case"]: item for item in results}
+required = (("rr40", 40), ("reset_nonnull0", 0))
+for name, expected_length in required:
+    item = by_name[name]
+    if item["set"]["return"] != 0 or item["after"]["return"] != 0 or item["after"]["length"] != expected_length:
+        raise SystemExit(f"Native IP_OPTIONS contract failed: {name}")

@@ -399,7 +399,7 @@ function Run-Tools([string]$Target, [string]$Directory) {
             '--output-dir', $guiDirectory, '--timeout', [string]$BestTraceTimeout) $Directory 'besttrace-helper'
     } catch { $guiFailure = $_.Exception.Message }
     $api = @(Invoke-PingApi $Target $Directory)
-    if ($null -ne $gui) { $guiRun = Wait-CapturedProcess $gui ($BestTraceTimeout + 15) }
+    if ($null -ne $gui) { $guiRun = Wait-CapturedProcess $gui ($BestTraceTimeout + 60) }
     else { $guiRun = [ordered]@{ exit_code = $null; timed_out = $false; error = $guiFailure } }
     $tracertRun = Wait-CapturedProcess $tracert 35
     $pingRun = Wait-CapturedProcess $ping 8
