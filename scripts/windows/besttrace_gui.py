@@ -118,6 +118,23 @@ def by_caption(window, captions, class_name="Button"):
     return None
 
 
+def activate_button(control):
+    """Click the actual center of a button, with a native-message fallback.
+
+    BestTrace ignored ButtonWrapper.click() at its default (0, 0) corner on
+    the Windows runner. click_input() targets the center and delivers actual
+    input. A posted BM_CLICK supports environments where input is unavailable
+    and avoids synchronously blocking when the button opens a modal dialog.
+    """
+    safe(lambda: control.top_level_parent().set_focus())
+    try:
+        control.click_input()
+        return "click_input"
+    except Exception:
+        control.post_message(0x00F5, 0, 0)  # BM_CLICK
+        return "posted_BM_CLICK"
+
+
 def read_rows(window):
     table = by_id(window, CONTROL_IDS["results"], "SysListView32")
     if table is None:
@@ -238,6 +255,8 @@ def main():
 
         startup_deadline = time.monotonic() + 20
         main_window = None
+        launch_button = None
+        launched_at = None
         while time.monotonic() < startup_deadline:
             trace_window = find_trace()
             if trace_window is not None:
@@ -251,13 +270,22 @@ def main():
                     main_edit = by_id(window, CONTROL_IDS["main_target"], "Edit")
                     if main_edit is not None:
                         main_edit.set_edit_text(target)
-                    launch.click()
+                    launch_button = launch
+                    result["open_trace_action"] = activate_button(launch)
+                    launched_at = time.monotonic()
                     break
             if main_window is not None:
                 break
             time.sleep(0.25)
         while trace_window is None and time.monotonic() < startup_deadline:
             trace_window = find_trace()
+            if trace_window is None and launched_at is not None and \
+                    time.monotonic() - launched_at >= 3 and \
+                    not result.get("open_trace_retry"):
+                # The window may have appeared before the runner's desktop
+                # accepted focus/input. Retry using the button's native event.
+                launch_button.post_message(0x00F5, 0, 0)
+                result["open_trace_retry"] = "posted_BM_CLICK"
             time.sleep(0.25)
         if trace_window is None:
             evidence("startup-blocked", main_window)
@@ -280,7 +308,7 @@ def main():
         if tcp.get_check_state() != 0:
             # Deliver the click notification too: a bare BM_SETCHECK may leave
             # application state unchanged when a checkbox has an event handler.
-            tcp.click()
+            result["disable_tcp_action"] = activate_button(tcp)
         if tcp.get_check_state() != 0:
             raise Blocked("BestTrace TCP checkbox could not be disabled")
         result["probe_mode"] = "ICMP"
@@ -304,7 +332,7 @@ def main():
             raise Blocked("Cannot identify BestTrace Start button")
         initial_rows = read_rows(trace_window)
         evidence("configured", trace_window)
-        run_button.click()
+        result["start_trace_action"] = activate_button(run_button)
         result["trace_started"] = True
         deadline = time.monotonic() + args.timeout
         started = time.monotonic()

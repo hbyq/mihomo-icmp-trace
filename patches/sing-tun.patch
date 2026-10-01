@@ -1,9 +1,9 @@
 diff --git a/ping/trace.go b/ping/trace.go
 new file mode 100644
-index 0000000..02b70b5
+index 0000000..b6514cf
 --- /dev/null
 +++ b/ping/trace.go
-@@ -0,0 +1,398 @@
+@@ -0,0 +1,428 @@
 +package ping
 +
 +// Experimental transparent Echo/ICMP-error forwarding. Unlike the legacy ping
@@ -246,6 +246,9 @@ index 0000000..02b70b5
 +		delete(d.probes, id)
 +		releaseTraceID(id)
 +		d.mu.Unlock()
++	} else {
++		d.logger.DebugContext(d.ctx, "ICMP trace send: target ", d.target, " hop ", hop,
++			" id ", binary.BigEndian.Uint16(probe.header[off+4:off+6]), " -> ", id, " seq ", probe.sequence)
 +	}
 +	return err
 +}
@@ -333,6 +336,7 @@ index 0000000..02b70b5
 +func (d *TraceDestination) readLoop() {
 +	defer d.Close()
 +	data, oob := make([]byte, 65575), make([]byte, 1024)
++	diagnosticReceives := 0
 +	for {
 +		if err := d.conn.SetReadDeadline(time.Now().Add(d.timeout)); err != nil {
 +			return
@@ -363,6 +367,27 @@ index 0000000..02b70b5
 +			binary.BigEndian.PutUint16(packet[2:4], binary.LittleEndian.Uint16(packet[2:4])+uint16(packet[0]&15)*4)
 +			binary.BigEndian.PutUint16(packet[6:8], binary.LittleEndian.Uint16(packet[6:8]))
 +		}
++		// A raw socket also receives unrelated ICMP traffic. Bound these debug
++		// details and never log payloads; they distinguish receive, match, and
++		// TUN injection failures during platform compatibility testing.
++		diagnosticReceive := diagnosticReceives < 128
++		if diagnosticReceive {
++			diagnosticReceives++
++			off, router, _, parseErr := traceIP(packet, false)
++			if parseErr != nil {
++				d.logger.DebugContext(d.ctx, "ICMP trace receive: bytes ", len(packet), " invalid IP header: ", parseErr)
++			} else {
++				icmp := packet[off:]
++				id, sequence := uint16(0), uint16(0)
++				if icmp[0] == 0 || icmp[0] == 129 {
++					id, sequence = binary.BigEndian.Uint16(icmp[4:6]), binary.BigEndian.Uint16(icmp[6:8])
++				} else if qoff, _, _, qerr := traceIP(icmp[8:], true); qerr == nil {
++					id, sequence = binary.BigEndian.Uint16(icmp[8+qoff+4:8+qoff+6]), binary.BigEndian.Uint16(icmp[8+qoff+6:8+qoff+8])
++				}
++				d.logger.DebugContext(d.ctx, "ICMP trace receive: bytes ", len(packet), " router ", router,
++					" type ", icmp[0], " code ", icmp[1], " id ", id, " seq ", sequence)
++			}
++		}
 +		d.mu.Lock()
 +		d.expireLocked(time.Now())
 +		restored, ok := restoreTraceReply(packet, d.target, func(id, sequence uint16) (traceProbe, bool) {
@@ -375,9 +400,14 @@ index 0000000..02b70b5
 +			return probe, true
 +		})
 +		d.mu.Unlock()
++		if diagnosticReceive {
++			d.logger.DebugContext(d.ctx, "ICMP trace receive match: target ", d.target, " accepted ", ok)
++		}
 +		if ok {
 +			if err := d.context.WritePacket(restored); err != nil {
 +				d.logger.DebugContext(d.ctx, "ICMP trace write back: ", err)
++			} else {
++				d.logger.DebugContext(d.ctx, "ICMP trace write back: target ", d.target, " bytes ", len(restored), " success")
 +			}
 +		}
 +	}
@@ -449,10 +479,10 @@ index 0000000..5242b81
 +}
 diff --git a/ping/trace_test.go b/ping/trace_test.go
 new file mode 100644
-index 0000000..d091af4
+index 0000000..e2f245a
 --- /dev/null
 +++ b/ping/trace_test.go
-@@ -0,0 +1,300 @@
+@@ -0,0 +1,365 @@
 +package ping
 +
 +import (
@@ -461,12 +491,15 @@ index 0000000..d091af4
 +	"net"
 +	"net/netip"
 +	"os"
++	"runtime"
 +	"sync"
 +	"testing"
 +	"time"
 +
 +	"github.com/metacubex/sing/common/buf"
 +	"github.com/metacubex/sing/common/logger"
++	"golang.org/x/net/ipv4"
++	"golang.org/x/net/ipv6"
 +)
 +
 +func testTracePacket(src, dst string, hop byte, body []byte) []byte {
@@ -677,6 +710,14 @@ index 0000000..d091af4
 +}
 +
 +func TestTraceHopBudgetOnWire(t *testing.T) {
++	if runtime.GOOS == "windows" {
++		// Winsock raw sockets receive inbound datagrams; they do not promise
++		// to mirror locally generated loopback Echo requests. Verify the
++		// actual socket options and round trips here. Windows integration
++		// tests independently capture physical-egress TTL with WinDivert.
++		testTraceHopBudgetSocket(t)
++		return
++	}
 +	// An independent raw socket observes the actual IP TTL, not a mock setter.
 +	sniffer, err := net.ListenIP("ip4:icmp", &net.IPAddr{IP: net.ParseIP("127.0.0.1")})
 +	if err != nil {
@@ -715,6 +756,60 @@ index 0000000..d091af4
 +			t.Fatalf("TTL changed on wire: seq %d TTL %d", seq, b[8])
 +		}
 +		seen[b[8]] = true
++	}
++}
++
++func testTraceHopBudgetSocket(t *testing.T) {
++	for _, target := range []string{"127.0.0.1", "::1"} {
++		t.Run(target, func(t *testing.T) {
++			addr := netip.MustParseAddr(target)
++			c := make(traceTestContext, 16)
++			destination, err := ConnectTraceDestination(context.Background(), logger.NOP(), nil, addr, addr, c, 5*time.Second)
++			if err != nil {
++				t.Fatal(err)
++			}
++			defer destination.Close()
++			d := destination.(*TraceDestination)
++			for _, hop := range []byte{1, 2, 7, 31} {
++				request := testTracePacket(target, target, hop, testTraceEcho(addr.Is6(), 333, uint16(hop), false))
++				if err := d.WritePacket(buf.As(request).ToOwned()); err != nil {
++					t.Fatal(err)
++				}
++				// These getters call getsockopt on the same real socket used by
++				// WritePacket, rather than inspecting a mock or a stored value.
++				var actual int
++				if addr.Is4() {
++					actual, err = ipv4.NewPacketConn(d.conn).TTL()
++				} else {
++					actual, err = ipv6.NewPacketConn(d.conn).HopLimit()
++				}
++				if err != nil {
++					t.Fatal(err)
++				}
++				if actual != int(hop) {
++					t.Fatalf("socket hop budget: sent %d, read back %d", hop, actual)
++				}
++				select {
++				case reply := <-c:
++					off, source, targetAddr, err := traceIP(reply, false)
++					if err != nil {
++						t.Fatal(err)
++					}
++					replyType := byte(0)
++					if addr.Is6() {
++						replyType = 129
++					}
++					if source != addr || targetAddr != addr || reply[off] != replyType ||
++						binary.BigEndian.Uint16(reply[off+4:off+6]) != 333 ||
++						binary.BigEndian.Uint16(reply[off+6:off+8]) != uint16(hop) {
++						t.Fatal("loopback reply does not match the probe")
++					}
++				case <-time.After(3 * time.Second):
++					t.Fatal("no real loopback reply")
++				}
++				t.Logf("real socket hop budget %d and Echo round trip verified", actual)
++			}
++		})
 +	}
 +}
 +

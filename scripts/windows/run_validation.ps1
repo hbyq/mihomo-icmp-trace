@@ -8,7 +8,8 @@ param(
     [string[]]$Targets = @('1.1.1.1', '8.8.8.8'),
     [ValidateRange(15, 120)][int]$BestTraceTimeout = 90,
     [switch]$SkipPacketCapture,
-    [switch]$UseFixture
+    [switch]$UseFixture,
+    [switch]$AllowIcmpErrors
 )
 
 Set-StrictMode -Version Latest
@@ -22,6 +23,7 @@ $script:ActiveCapture = $false
 $script:FixtureProcess = $null
 $script:FixtureDirectory = $null
 $script:FixtureStopFile = $null
+$script:FirewallRuleName = $null
 
 function Write-Json($Object, [string]$Path) {
     ConvertTo-Json -InputObject $Object -Depth 20 | Set-Content -LiteralPath $Path -Encoding utf8
@@ -218,15 +220,24 @@ function Stop-PacketCapture($Capture, [string]$Directory, [string]$Target, $Phys
 import json,struct,sys,ipaddress,hashlib
 path,target,physical_json,out=sys.argv[1:]
 physical=set(json.loads(physical_json)); data=open(path,'rb').read()
-endian='<'; interfaces=[]; packets=[]; seen=set(); offset=0; unsupported=set(); errors=[]
+endian='<'; interfaces=[]; packets=[]; seen=set(); offset=0; unsupported=set(); errors=[]; raw_under_ethernet=0
+def looks_like_raw_ipv4(frame):
+    if len(frame)<20 or frame[0]>>4!=4:return False
+    h=(frame[0]&15)*4;total=struct.unpack('!H',frame[2:4])[0]
+    return h>=20 and h<=len(frame) and total>=h and total<=len(frame) and frame[9]==1
 def ipv4(frame,link):
+    global raw_under_ethernet
     if link==1:
-        if len(frame)<14:return None
-        proto=struct.unpack('!H',frame[12:14])[0]; pos=14
-        while proto in (0x8100,0x88a8) and len(frame)>=pos+4:
-            proto=struct.unpack('!H',frame[pos+2:pos+4])[0];pos+=4
-        if proto!=0x0800:return None
-        frame=frame[pos:]
+        # Windows Pktmon declares Ethernet for Wintun components, while
+        # actual captured Wintun bytes are raw IP. Validate that layout first.
+        if looks_like_raw_ipv4(frame):raw_under_ethernet+=1
+        else:
+            if len(frame)<14:return None
+            proto=struct.unpack('!H',frame[12:14])[0]; pos=14
+            while proto in (0x8100,0x88a8) and len(frame)>=pos+4:
+                proto=struct.unpack('!H',frame[pos+2:pos+4])[0];pos+=4
+            if proto!=0x0800:return None
+            frame=frame[pos:]
     elif link==113:frame=frame[16:]
     elif link==276:frame=frame[20:]
     elif link==0:frame=frame[4:]
@@ -267,7 +278,8 @@ restored=[p for p in packets if p['type']==11 and p['src']!=target and p.get('qu
 result={'status':'verified' if errors_from_routers else 'inconclusive',
   'icmp_packet_count':len(packets),'physical_echo_requests':echo,'physical_time_exceeded':errors_from_routers,
   'possible_tun_restored_time_exceeded':restored,'router_addresses':sorted({p['src'] for p in errors_from_routers}),
-  'observed_egress_ttls':sorted({p['ttl'] for p in echo}),'unsupported_linktypes':sorted(unsupported),'errors':errors}
+  'observed_egress_ttls':sorted({p['ttl'] for p in echo}),
+  'raw_ipv4_under_ethernet_linktype':raw_under_ethernet,'unsupported_linktypes':sorted(unsupported),'errors':errors}
 open(out,'w',encoding='utf-8').write(json.dumps(result,indent=2))
 '@
         $analysisPath = Join-Path $Directory 'packet-analysis.json'
@@ -432,7 +444,11 @@ rules:
         if ($null -ne $result.capture) { Stop-PacketCapture $result.capture $directory $Target $PhysicalExit }
         if ($UseFixture -and $null -ne $script:FixtureDirectory) {
             $result.fixture_evidence = Read-FixtureEvidence $scenarioStartedAt
-            Write-Json $result.fixture_evidence (Join-Path $directory 'fixture-events.json')
+            $eventsPath = Join-Path $directory 'fixture-events.json'
+            Write-Json $result.fixture_evidence $eventsPath
+            # Preserve raw packet/event evidence once, outside summary.json.
+            $result.fixture_evidence.Remove('events')
+            $result.fixture_evidence.events_path = $eventsPath
         }
         if ($null -ne $process -and -not $process.HasExited) {
             try {
@@ -464,6 +480,7 @@ $fatalError = $null
 $summary = [ordered]@{
     status = 'blocked'; reason = $null; mode = $(if ($UseFixture) { 'synthetic-icmp-fixture' } else { 'public-network' })
     started_at = $script:StartedAt.ToString('o'); ended_at = $null; scenarios = @(); fixture = $null
+    allow_icmp_errors = [bool]$AllowIcmpErrors; firewall = $null
     limitations = @('Only IPv4 real-IP probes are exercised here; Fake-IP, IPv6, Verge service mode and Tailscale coexistence need separate validation.')
 }
 try {
@@ -476,6 +493,24 @@ try {
     $OutputDir = [System.IO.Path]::GetFullPath($OutputDir)
     [void](New-Item -ItemType Directory -Path $OutputDir -Force)
     if (-not (Test-Path $script:Helper)) { throw 'besttrace_gui.py is missing' }
+    $summary.firewall = [ordered]@{
+        profiles_before = @(Get-NetFirewallProfile | Select-Object Name, Enabled, DefaultInboundAction, DefaultOutboundAction)
+        diagnostic_rule = $null; removed = $false; cleanup_error = $null
+    }
+    Write-Json $summary.firewall.profiles_before (Join-Path $OutputDir 'firewall-profiles-before.json')
+    if ($AllowIcmpErrors) {
+        if (-not $UseFixture) { throw '-AllowIcmpErrors is scoped to the controlled fixture addresses and requires -UseFixture' }
+        $script:FirewallRuleName = 'MihomoICMPErrors-' + $PID + '-' + [Guid]::NewGuid().ToString('N')
+        $rule = New-NetFirewallRule -Name $script:FirewallRuleName -DisplayName $script:FirewallRuleName `
+            -Direction Inbound -Protocol ICMPv4 -IcmpType @('3', '11', '12') -Action Allow -Profile Any `
+            -RemoteAddress @('192.0.2.1', '192.0.2.2', '203.0.113.77')
+        $summary.firewall.diagnostic_rule = [ordered]@{
+            name = $script:FirewallRuleName; direction = 'Inbound'; protocol = 'ICMPv4'
+            types = @('3', '11', '12'); remote_addresses = @('192.0.2.1', '192.0.2.2', '203.0.113.77')
+            profile = 'Any'; action = 'Allow'; program = 'Any'; enabled = [string]$rule.Enabled
+        }
+        Write-Json $summary.firewall (Join-Path $OutputDir 'firewall-diagnostic.json')
+    }
     if ($UseFixture) {
         $Targets = @('203.0.113.77')
         $summary.limitations += 'Replies are generated by a WinDivert fixture after actual physical egress; this does not validate a real public router path.'
@@ -550,6 +585,12 @@ try {
 } catch {
     $fatalError = $_.Exception.ToString(); $summary.reason = $_.Exception.Message
 } finally {
+    if ($null -ne $script:FirewallRuleName) {
+        try {
+            Remove-NetFirewallRule -Name $script:FirewallRuleName -ErrorAction Stop
+            $summary.firewall.removed = $true
+        } catch { $summary.firewall.cleanup_error = $_.Exception.Message }
+    }
     if ($null -ne $script:FixtureProcess) {
         try {
             'stop' | Set-Content -LiteralPath $script:FixtureStopFile -Encoding ascii

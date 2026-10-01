@@ -75,7 +75,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        mode: [public, fixture]
+        mode: [public, fixture, fixture-icmp-allow]
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -115,17 +115,32 @@ jobs:
           VALIDATION_MODE: ${{ matrix.mode }}
         run: |
           $arguments = @{ KernelPath = (Resolve-Path 'dist/mihomo-windows-amd64-icmp-trace-exp1.exe').Path; BestTracePath = $env:BESTTRACE_EXE; OutputDir = 'evidence/runtime' }
-          if ($env:VALIDATION_MODE -eq 'fixture') { $arguments.UseFixture = $true }
+          if ($env:VALIDATION_MODE -like 'fixture*') { $arguments.UseFixture = $true }
+          if ($env:VALIDATION_MODE -eq 'fixture-icmp-allow') { $arguments.AllowIcmpErrors = $true }
           & scripts/windows/run_validation.ps1 @arguments
+          $validationExit = $LASTEXITCODE
+          if ($env:VALIDATION_MODE -eq 'public' -and $validationExit -eq 2) {
+            Write-Host '::notice::Public-network validation is inconclusive; see recorded baseline and summary. Controlled fixture results remain mandatory.'
+            exit 0
+          }
+          exit $validationExit
       - name: Summarize actual results
         if: always()
         shell: pwsh
         run: |
           if (Test-Path 'evidence/runtime/summary.json') {
-            Get-Content 'evidence/runtime/summary.json' -Raw
+            $result = Get-Content 'evidence/runtime/summary.json' -Raw | ConvertFrom-Json
+            $brief = [ordered]@{
+              status = $result.status
+              reason = $result.reason
+              mode = $result.mode
+              scenarios = @($result.scenarios | Select-Object scenario, target, status, reason, tun_route_verified, icmp_handler_log_seen)
+              limitations = $result.limitations
+            } | ConvertTo-Json -Depth 8
+            Write-Host $brief
             "## Windows ${{ matrix.mode }} validation" | Out-File $env:GITHUB_STEP_SUMMARY -Append
             '```json' | Out-File $env:GITHUB_STEP_SUMMARY -Append
-            Get-Content 'evidence/runtime/summary.json' -Raw | Out-File $env:GITHUB_STEP_SUMMARY -Append
+            $brief | Out-File $env:GITHUB_STEP_SUMMARY -Append
             '```' | Out-File $env:GITHUB_STEP_SUMMARY -Append
           }
       - name: Upload Windows runtime evidence
