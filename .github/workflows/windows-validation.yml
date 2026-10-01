@@ -1,0 +1,58 @@
+name: Windows ICMP and BestTrace validation
+
+on:
+  push:
+    branches: [codex/windows-icmp-validation]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: windows-icmp-validation-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  preflight:
+    runs-on: windows-2022
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install GUI automation dependencies
+        run: python -m pip install pywinauto==0.6.9 pillow psutil
+      - name: Record Windows environment and baseline route
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force evidence | Out-Null
+          whoami /all | Out-File evidence/identity.txt
+          query session | Out-File evidence/sessions.txt
+          Get-ComputerInfo | Select-Object WindowsProductName,WindowsVersion,OsBuildNumber | ConvertTo-Json | Set-Content evidence/os.json
+          Get-NetAdapter | Format-List | Out-File evidence/adapters.txt
+          Get-NetRoute | Format-Table -AutoSize | Out-File evidence/routes.txt
+          tracert -4 -d -h 12 -w 500 1.1.1.1 | Out-File evidence/tracert-baseline.txt
+      - name: Install official Windows BestTrace
+        shell: pwsh
+        run: |
+          $installer = Join-Path $env:RUNNER_TEMP 'besttrace-setup.exe'
+          $destination = Join-Path $env:RUNNER_TEMP 'besttrace-app'
+          Invoke-WebRequest 'https://cdn.ipip.net/17mon/besttrace.exe' -OutFile $installer
+          $hash = (Get-FileHash $installer -Algorithm SHA256).Hash.ToLowerInvariant()
+          if ($hash -ne '47f6787ec5b10a98b60f9d4fc2976d13791f49c223024197d38710f0327bd305') { throw 'Official BestTrace installer changed; review it before running.' }
+          $install = Start-Process $installer -ArgumentList @('/VERYSILENT','/SUPPRESSMSGBOXES','/NORESTART',"/DIR=$destination") -PassThru -Wait
+          if ($install.ExitCode -ne 0) { throw "BestTrace installation failed: $($install.ExitCode)" }
+          $program = Get-ChildItem $destination -Filter 17monipdb.exe -Recurse | Select-Object -First 1
+          if (-not $program) { throw 'Installed BestTrace application not found.' }
+          "BESTTRACE_EXE=$($program.FullName)" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+          Get-FileHash $program.FullName -Algorithm SHA256 | Format-List | Out-File evidence/besttrace-hash.txt
+      - name: Inspect actual BestTrace GUI
+        run: python scripts/windows/probe_environment.py --exe "$env:BESTTRACE_EXE" --output-dir evidence/gui
+      - name: Upload Windows preflight evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows-preflight-evidence
+          path: evidence/
+          retention-days: 7
