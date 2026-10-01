@@ -3,8 +3,9 @@
 
 Requires Windows, Python 3, pywinauto and Pillow. --exe is the installed
 17monipdb.exe, not IPIP's besttrace.exe installer. No BestTrace command-line
-trace options are assumed. Control IDs below come from the official Windows
-3.8.0 dialog resources; captions provide a fallback for nearby releases.
+trace options are assumed. Control IDs below come from the official downloadable
+Windows application's dialog resources; captions provide a fallback for nearby
+releases. Its tested file version is 3.9.6.6, despite the download-page label.
 
 Exit codes: 0 pass, 1 fail, 2 inconclusive, 3 blocked. A GUI launch alone cannot
 pass. Public networks can hide every intermediate hop, making a trace
@@ -218,6 +219,27 @@ def matching_processes(executable):
     return found
 
 
+def browser_files(executable):
+    """Record initialization paths and file metadata, never profile contents."""
+    roots = [executable.parent, Path(str(executable) + ".WebView2")]
+    for variable in ["LOCALAPPDATA", "PROGRAMFILES", "PROGRAMFILES(X86)"]:
+        value = os.environ.get(variable)
+        if value:
+            roots.extend([Path(value) / "Microsoft/EdgeWebView/Application",
+                          Path(value) / "Microsoft/Edge/Application"])
+    information = []
+    for root in roots:
+        item = {"path": str(root), "exists": root.exists(), "entries": []}
+        if root.is_dir():
+            for entry in list(root.iterdir())[:40]:
+                stat = safe(entry.stat)
+                item["entries"].append({"name": entry.name, "directory": entry.is_dir(),
+                                        "bytes": stat.st_size if stat else None,
+                                        "modified": stat.st_mtime if stat else None})
+        information.append(item)
+    return information
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--exe", required=True, type=Path)
@@ -226,6 +248,8 @@ def main():
     parser.add_argument("--output-dir", required=True, type=Path)
     parser.add_argument("--timeout", default=90, type=float,
                         help="Seconds allowed for the actual trace after Start")
+    parser.add_argument("--browser-ready-timeout", default=45, type=float,
+                        help="Bounded seconds to prepare each browser startup; one recovery is allowed")
     args = parser.parse_args()
     out = args.output_dir.resolve()
     out.mkdir(parents=True, exist_ok=True)
@@ -262,8 +286,31 @@ def main():
         owned_pids.update(candidates)
         result["application_processes"] = processes
         result["owned_pids"] = sorted(owned_pids)
-        return [window for window in desktop.windows(visible_only=False)
-                if window.element_info.process_id in candidates]
+        # Desktop.windows() constructs every wrapper as one batch; a transient
+        # IME HWND disappearing can abort the entire call. Enumerate native
+        # handles first and wrap each owned handle independently instead.
+        handles = []
+        callback_type = ctypes.WINFUNCTYPE(ctypes.c_int, ctypes.c_void_p, ctypes.c_void_p)
+        user = ctypes.windll.user32
+        user.GetWindowThreadProcessId.argtypes = [ctypes.c_void_p, ctypes.POINTER(ctypes.c_uint32)]
+        user.EnumWindows.argtypes = [callback_type, ctypes.c_void_p]
+
+        @callback_type
+        def collect(hwnd, unused):
+            pid = ctypes.c_uint32()
+            user.GetWindowThreadProcessId(hwnd, ctypes.byref(pid))
+            if pid.value in candidates:
+                handles.append(int(hwnd))
+            return True
+
+        user.EnumWindows(collect, None)
+        live_windows = []
+        for handle in handles:
+            try:
+                live_windows.append(desktop.window(handle=handle).wrapper_object())
+            except Exception:
+                result["stale_window_redetections"] = result.get("stale_window_redetections", 0) + 1
+        return live_windows
 
     def capture_screenshot(label, primary, focus=False):
         """Capture before lengthy enumeration, while a fast trace still exists."""
@@ -313,8 +360,8 @@ def main():
         except ValueError as exc:
             raise ValueError("--target must be a literal IPv4 or IPv6 address") from exc
         result["target"] = target
-        if args.timeout <= 0:
-            raise ValueError("--timeout must be positive")
+        if args.timeout <= 0 or args.browser_ready_timeout <= 0:
+            raise ValueError("Both timeouts must be positive")
         if sys.platform != "win32":
             raise Blocked("This test requires actual Windows and the Windows BestTrace GUI")
         result.update(session_information())
@@ -336,9 +383,16 @@ def main():
 
         def find_trace():
             for window in windows():
-                if by_id(window, CONTROL_IDS["run"], "Button") is not None and \
-                        by_id(window, CONTROL_IDS["trace_target"], "ComboBox") is not None:
-                    return window
+                try:
+                    if not ctypes.windll.user32.IsWindow(window.handle):
+                        continue
+                    if by_id(window, CONTROL_IDS["run"], "Button") is not None and \
+                            by_id(window, CONTROL_IDS["trace_target"], "ComboBox") is not None:
+                        return window
+                except Exception:
+                    # Newly created native/IME windows can disappear between
+                    # enumeration and inspection. Search the other live HWNDs.
+                    result["stale_window_redetections"] = result.get("stale_window_redetections", 0) + 1
             return None
 
         startup_deadline = time.monotonic() + 20
@@ -350,8 +404,8 @@ def main():
             if trace_window is not None:
                 break
             for window in windows():
-                launch = by_id(window, CONTROL_IDS["open_trace"], "Button") or by_caption(
-                    window, ["Traceroute(&T)", "Traceroute", "路由跟踪(&T)", "路由跟踪"])
+                launch = safe(lambda: by_id(window, CONTROL_IDS["open_trace"], "Button")) or safe(
+                    lambda: by_caption(window, ["Traceroute(&T)", "Traceroute", "路由跟踪(&T)", "路由跟踪"]))
                 if launch is not None:
                     main_window = window
                     evidence("startup", window)
@@ -384,35 +438,93 @@ def main():
         # code (normal auto-close versus a crash), even after its PID disappears.
         trace_process_handle = ctypes.windll.kernel32.OpenProcess(
             0x1000, False, result["trace_pid"])
-        # On a cold Windows runner the trace controls appear before the map's
-        # embedded browser initializes. A native baseline previously crashed
-        # at 0x98f20 (virtual call near JS-string formatting), while its browser
-        # host was hidden. This is a hypothesis, not a packet-parser diagnosis.
-        # Wait for a real renderer rather than treating controls as UI readiness.
-        browser_started = time.monotonic()
-        browser_ready_since = None
-        result["browser_ready"] = False
-        while time.monotonic() - browser_started < 15:
-            if process_image(result["trace_pid"]) is None:
-                record_trace_exit()
-                raise RuntimeError("BestTrace trace process exited during browser initialization")
-            renderers = [control for control in trace_window.descendants()
-                         if safe(control.class_name, "") in
-                         {"Chrome_RenderWidgetHostHWND", "Internet Explorer_Server"} and
-                         safe(control.is_visible, False)]
-            if renderers:
-                if browser_ready_since is None:
-                    browser_ready_since = time.monotonic()
-                if time.monotonic() - browser_ready_since >= 0.5:
-                    result["browser_ready"] = True
-                    result["browser_render_controls"] = [describe(control) for control in renderers]
+        # On cold Windows runners the trace controls can exist while the map
+        # host remains hidden and zero-sized. Starting then reproducibly caused
+        # 0xC0000005 at a browser-related virtual call, even with valid RR replies.
+        # Never start against that incomplete UI. Retain the failed preparation
+        # and allow one explicitly recorded reopen of our own trace child.
+        result["browser_init_attempts"] = []
+        result["preparation_recovered"] = False
+        result["browser_ready_total_wait_seconds"] = 0
+        for attempt in range(1, 3):
+            browser_started = time.monotonic()
+            browser_ready_since = None
+            result["browser_ready"] = False
+            preparation = {"attempt": attempt, "trace_pid": result["trace_pid"],
+                           "trace_hwnd": int(trace_window.handle), "trace_started": False,
+                           "status": "preparing", "files_before": browser_files(executable)}
+            result["browser_init_attempts"].append(preparation)
+            while time.monotonic() - browser_started < args.browser_ready_timeout:
+                if process_image(result["trace_pid"]) is None:
+                    record_trace_exit()
+                    preparation.update(status="fail", reason="Trace child exited before browser readiness",
+                                       exit_code=result.get("trace_process_exit_code_hex"))
                     break
-            else:
-                browser_ready_since = None
-            time.sleep(0.25)
-        result["browser_ready_wait_seconds"] = round(time.monotonic() - browser_started, 3)
-        if not result["browser_ready"]:
-            result["errors"].append("Embedded browser renderer did not become visible within 15s; actual trace still attempted")
+                controls = safe(trace_window.descendants)
+                if controls is None:
+                    live = find_trace()
+                    if live is not None:
+                        trace_window = live
+                        controls = safe(trace_window.descendants, [])
+                        result["stale_window_redetections"] = result.get("stale_window_redetections", 0) + 1
+                    else:
+                        controls = []
+                renderers = [control for control in controls
+                             if safe(control.class_name, "") in
+                             {"Chrome_RenderWidgetHostHWND", "Internet Explorer_Server"} and
+                             safe(control.is_visible, False)]
+                if renderers:
+                    if browser_ready_since is None:
+                        browser_ready_since = time.monotonic()
+                    if time.monotonic() - browser_ready_since >= 0.5:
+                        result["browser_ready"] = True
+                        result["browser_render_controls"] = [describe(control) for control in renderers]
+                        break
+                else:
+                    browser_ready_since = None
+                time.sleep(0.25)
+            waited = round(time.monotonic() - browser_started, 3)
+            result["browser_ready_wait_seconds"] = waited
+            result["browser_ready_total_wait_seconds"] += waited
+            preparation.update(wait_seconds=waited, browser_ready=result["browser_ready"],
+                               files_after=browser_files(executable))
+            evidence(f"browser-attempt-{attempt}", trace_window)
+            if result["browser_ready"]:
+                preparation["status"] = "ready"
+                result["preparation_recovered"] = attempt > 1
+                break
+            if preparation["status"] != "fail":
+                preparation.update(status="blocked", reason="Visible browser renderer unavailable at bounded startup deadline")
+            if attempt == 2:
+                raise Blocked("BestTrace browser failed to initialize in two recorded attempts; no trace was started")
+            failed_pid = result["trace_pid"]
+            preparation["recovery_action"] = "Close owned unready trace child and reopen through original main GUI"
+            path = process_image(failed_pid)
+            if path and os.path.normcase(os.path.abspath(path)) == os.path.normcase(str(executable)):
+                Application(backend="win32").connect(process=failed_pid).kill(soft=False)
+            if trace_process_handle:
+                ctypes.windll.kernel32.CloseHandle(trace_process_handle)
+                trace_process_handle = None
+            trace_window = None
+            # Rediscover the live main HWND too; do not reuse a stale wrapper.
+            main_candidates = [window for window in windows()
+                               if safe(lambda: by_id(window, CONTROL_IDS["open_trace"], "Button")) is not None]
+            if not main_candidates:
+                raise Blocked("Original BestTrace main window unavailable for the recorded recovery")
+            main_window = main_candidates[0]
+            launch_button = by_id(main_window, CONTROL_IDS["open_trace"], "Button")
+            preparation["reopen_action"] = activate_button(launch_button)
+            reopen_deadline = time.monotonic() + 20
+            while trace_window is None and time.monotonic() < reopen_deadline:
+                trace_window = find_trace()
+                time.sleep(0.25)
+            if trace_window is None:
+                raise Blocked("No fresh owned trace window appeared during the recorded recovery")
+            result["trace_pid"] = int(trace_window.element_info.process_id)
+            trace_process_handle = ctypes.windll.kernel32.OpenProcess(0x1000, False, result["trace_pid"])
+            result.pop("trace_process_exited", None)
+            result.pop("trace_process_exit_code", None)
+            result.pop("trace_process_exit_code_hex", None)
         evidence("browser-readiness", trace_window)
 
         vantage = by_id(trace_window, CONTROL_IDS["vantage"], "Button")

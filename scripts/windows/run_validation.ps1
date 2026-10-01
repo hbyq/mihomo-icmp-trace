@@ -9,6 +9,7 @@ param(
     [ValidateRange(15, 120)][int]$BestTraceTimeout = 90,
     [ValidateRange(0, 1000)][double]$FixtureReplyDelayMs = 5,
     [switch]$SkipPacketCapture,
+    [switch]$BaselineOnly,
     [switch]$UseFixture,
     [switch]$AllowIcmpErrors,
     [switch]$ScopeIcmpErrorsToInterface
@@ -399,7 +400,7 @@ function Run-Tools([string]$Target, [string]$Directory) {
             '--output-dir', $guiDirectory, '--timeout', [string]$BestTraceTimeout) $Directory 'besttrace-helper'
     } catch { $guiFailure = $_.Exception.Message }
     $api = @(Invoke-PingApi $Target $Directory)
-    if ($null -ne $gui) { $guiRun = Wait-CapturedProcess $gui ($BestTraceTimeout + 60) }
+    if ($null -ne $gui) { $guiRun = Wait-CapturedProcess $gui ($BestTraceTimeout + 180) }
     else { $guiRun = [ordered]@{ exit_code = $null; timed_out = $false; error = $guiFailure } }
     $tracertRun = Wait-CapturedProcess $tracert 35
     $pingRun = Wait-CapturedProcess $ping 8
@@ -614,7 +615,8 @@ $summary = [ordered]@{
     started_at = $script:StartedAt.ToString('o'); ended_at = $null; scenarios = @(); fixture = $null
     allow_icmp_errors = [bool]$AllowIcmpErrors; firewall = $null
     scope_icmp_errors_to_interface = [bool]$ScopeIcmpErrorsToInterface
-    requires_correlated_tun_errors_from_both_fixture_routers = [bool]$UseFixture
+    requires_correlated_tun_errors_from_both_fixture_routers = [bool]($UseFixture -and -not $BaselineOnly)
+    baseline_only = [bool]$BaselineOnly
     limitations = @('Only IPv4 real-IP probes are exercised here; Fake-IP, IPv6, Verge service mode and Tailscale coexistence need separate validation.')
 }
 try {
@@ -695,45 +697,52 @@ try {
         if ($candidate.status -eq 'pass') { $baseline = $candidate; $selectedExit = $exit; break }
     }
     $selectedTarget = $baseline.target
-    $legacy = Run-Scenario 'legacy-mixed' $selectedTarget $selectedExit 'mixed' $false
-    $mixed = Run-Scenario 'trace-mixed' $selectedTarget $selectedExit 'mixed' $true
-    $gvisor = Run-Scenario 'trace-gvisor' $selectedTarget $selectedExit 'gvisor' $true
-    $summary.selected_target = $selectedTarget
-    $summary.baseline_intermediate_available = $baseline.status -eq 'pass'
-    $required = @($mixed, $gvisor)
-    $hardFailures = @($required | Where-Object { $_.runtime_failure })
-    if ($UseFixture -and $baseline.status -ne 'pass') {
-        $summary.status = 'blocked'; $summary.reason = 'The controlled fixture baseline did not show R1/R2/target without TUN; inspect baseline GUI/API results and fixture errors'
-    } elseif ($hardFailures.Count -gt 0) {
-        $summary.status = 'fail'; $summary.reason = 'At least one patched TUN scenario has a runtime/forwarding failure'
-    } elseif ($baseline.status -eq 'blocked' -or @($required | Where-Object { $_.status -eq 'blocked' }).Count -gt 0) {
-        $summary.status = 'blocked'; $summary.reason = 'The real Windows BestTrace GUI or a required TUN scenario could not be exercised'
-    } elseif ($baseline.status -ne 'pass') {
-        $summary.status = 'inconclusive'; $summary.reason = 'BestTrace without TUN has no usable intermediate-hop baseline on this Windows network'
-    } elseif ($UseFixture -and @($required | Where-Object {
-        $_.status -eq 'inconclusive' -and $null -ne $_.tools -and $_.tools.besttrace.status -eq 'pass' -and
-        -not $_.tun_restoration.passed
-    }).Count -gt 0) {
-        $summary.status = 'inconclusive'; $summary.reason = 'The tools show the controlled path, but independent captured Wintun error-restoration evidence is unavailable'
-    } elseif (@($required | Where-Object { $_.status -ne 'pass' }).Count -gt 0) {
-        $summary.status = 'fail'; $summary.reason = 'BestTrace sees intermediate hops without TUN, but a patched TUN scenario does not'
+    if ($BaselineOnly) {
+        $summary.selected_target = $selectedTarget
+        $summary.baseline_intermediate_available = $baseline.status -eq 'pass'
+        $summary.status = $baseline.status
+        $summary.reason = 'Baseline only: ' + $baseline.reason
     } else {
-        $packetGaps = @($required | Where-Object { $null -eq $_.capture -or $null -eq $_.capture.analysis -or $_.capture.analysis.status -ne 'verified' })
-        if ($UseFixture) {
-            $fixtureGaps = @($required | Where-Object {
-                $null -eq $_.fixture_evidence -or $_.fixture_evidence.status -ne 'recorded' -or
-                1 -notin $_.fixture_evidence.physical_ttls -or 2 -notin $_.fixture_evidence.physical_ttls -or
-                -not $_.tun_restoration.passed
-            })
-            if ($fixtureGaps.Count -gt 0) {
-                $summary.status = 'inconclusive'; $summary.reason = 'Tools show the controlled path but physical TTL1/2 or correlated Wintun error-backwrite evidence is missing'
-            } else {
-                $summary.status = 'pass'; $summary.reason = 'Actual Windows tools show R1/R2/target in both patched TUN stacks; captured error backwrites from both routers match the original Wintun probes, alongside physical-egress fixture evidence'
-            }
-        } elseif ($packetGaps.Count -gt 0) {
-            $summary.status = 'inconclusive'; $summary.reason = 'BestTrace shows intermediate hops through both patched TUN stacks, but independent on-wire Time Exceeded evidence is unavailable'
+        $legacy = Run-Scenario 'legacy-mixed' $selectedTarget $selectedExit 'mixed' $false
+        $mixed = Run-Scenario 'trace-mixed' $selectedTarget $selectedExit 'mixed' $true
+        $gvisor = Run-Scenario 'trace-gvisor' $selectedTarget $selectedExit 'gvisor' $true
+        $summary.selected_target = $selectedTarget
+        $summary.baseline_intermediate_available = $baseline.status -eq 'pass'
+        $required = @($mixed, $gvisor)
+        $hardFailures = @($required | Where-Object { $_.runtime_failure })
+        if ($UseFixture -and $baseline.status -ne 'pass') {
+            $summary.status = 'blocked'; $summary.reason = 'The controlled fixture baseline did not show R1/R2/target without TUN; inspect baseline GUI/API results and fixture errors'
+        } elseif ($hardFailures.Count -gt 0) {
+            $summary.status = 'fail'; $summary.reason = 'At least one patched TUN scenario has a runtime/forwarding failure'
+        } elseif ($baseline.status -eq 'blocked' -or @($required | Where-Object { $_.status -eq 'blocked' }).Count -gt 0) {
+            $summary.status = 'blocked'; $summary.reason = 'The real Windows BestTrace GUI or a required TUN scenario could not be exercised'
+        } elseif ($baseline.status -ne 'pass') {
+            $summary.status = 'inconclusive'; $summary.reason = 'BestTrace without TUN has no usable intermediate-hop baseline on this Windows network'
+        } elseif ($UseFixture -and @($required | Where-Object {
+            $_.status -eq 'inconclusive' -and $null -ne $_.tools -and $_.tools.besttrace.status -eq 'pass' -and
+            -not $_.tun_restoration.passed
+        }).Count -gt 0) {
+            $summary.status = 'inconclusive'; $summary.reason = 'The tools show the controlled path, but independent captured Wintun error-restoration evidence is unavailable'
+        } elseif (@($required | Where-Object { $_.status -ne 'pass' }).Count -gt 0) {
+            $summary.status = 'fail'; $summary.reason = 'BestTrace sees intermediate hops without TUN, but a patched TUN scenario does not'
         } else {
-            $summary.status = 'pass'; $summary.reason = 'Actual Windows BestTrace shows intermediate hops in both patched TUN stacks; selected Wintun routes, forwarding logs and correlated physical ICMP errors were observed'
+            $packetGaps = @($required | Where-Object { $null -eq $_.capture -or $null -eq $_.capture.analysis -or $_.capture.analysis.status -ne 'verified' })
+            if ($UseFixture) {
+                $fixtureGaps = @($required | Where-Object {
+                    $null -eq $_.fixture_evidence -or $_.fixture_evidence.status -ne 'recorded' -or
+                    1 -notin $_.fixture_evidence.physical_ttls -or 2 -notin $_.fixture_evidence.physical_ttls -or
+                    -not $_.tun_restoration.passed
+                })
+                if ($fixtureGaps.Count -gt 0) {
+                    $summary.status = 'inconclusive'; $summary.reason = 'Tools show the controlled path but physical TTL1/2 or correlated Wintun error-backwrite evidence is missing'
+                } else {
+                    $summary.status = 'pass'; $summary.reason = 'Actual Windows tools show R1/R2/target in both patched TUN stacks; captured error backwrites from both routers match the original Wintun probes, alongside physical-egress fixture evidence'
+                }
+            } elseif ($packetGaps.Count -gt 0) {
+                $summary.status = 'inconclusive'; $summary.reason = 'BestTrace shows intermediate hops through both patched TUN stacks, but independent on-wire Time Exceeded evidence is unavailable'
+            } else {
+                $summary.status = 'pass'; $summary.reason = 'Actual Windows BestTrace shows intermediate hops in both patched TUN stacks; selected Wintun routes, forwarding logs and correlated physical ICMP errors were observed'
+            }
         }
     }
 } catch {
