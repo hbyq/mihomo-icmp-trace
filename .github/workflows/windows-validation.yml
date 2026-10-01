@@ -21,7 +21,6 @@ jobs:
     env:
       CGO_ENABLED: '0'
       GOTOOLCHAIN: local
-      MSYS_NO_PATHCONV: '1'
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-go@v5
