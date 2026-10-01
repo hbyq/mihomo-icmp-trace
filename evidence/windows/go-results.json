@@ -1,0 +1,59 @@
+{
+  "status": "pass",
+  "problems": [],
+  "transport": {
+    "tests": {
+      "TestTraceRestore/203.0.113.20/echo": "pass",
+      "TestTraceRestore/203.0.113.20/time-exceeded": "pass",
+      "TestTraceRestore/203.0.113.20/unreachable": "pass",
+      "TestTraceRestore/203.0.113.20/packet-too-big": "pass",
+      "TestTraceRestore/203.0.113.20/parameter-problem": "pass",
+      "TestTraceRestore/2001:db8:1::20/echo": "pass",
+      "TestTraceRestore/2001:db8:1::20/time-exceeded": "pass",
+      "TestTraceRestore/2001:db8:1::20/unreachable": "pass",
+      "TestTraceRestore/2001:db8:1::20/packet-too-big": "pass",
+      "TestTraceRestore/2001:db8:1::20/parameter-problem": "pass",
+      "TestTraceRestore": "pass",
+      "TestTraceRejectUnrelatedAndMalformed": "pass",
+      "TestTraceRecordRouteValidation": "pass",
+      "TestTraceRecordRouteRestore/time-exceeded": "pass",
+      "TestTraceRecordRouteRestore/echo-without-options": "pass",
+      "TestTraceRecordRouteRestore/echo-with-options": "pass",
+      "TestTraceRecordRouteRestore": "pass",
+      "TestTraceRecordRouteLoopback": "pass",
+      "TestTraceLoopback/127.0.0.1": "pass",
+      "TestTraceLoopback/::1": "pass",
+      "TestTraceLoopback": "pass",
+      "TestTraceHopBudgetOnWire/127.0.0.1": "pass",
+      "TestTraceHopBudgetOnWire/::1": "pass",
+      "TestTraceHopBudgetOnWire": "pass"
+    },
+    "packages": {
+      "github.com/metacubex/sing-tun/ping": "pass"
+    },
+    "non_json_lines": [
+      "go: downloading github.com/metacubex/gvisor v0.0.0-20260807021258-5683e078dbc4",
+      "go: downloading github.com/stretchr/testify v1.11.1",
+      "go: downloading github.com/davecgh/go-spew v1.1.1",
+      "go: downloading github.com/pmezard/go-difflib v1.0.0",
+      "go: downloading gopkg.in/yaml.v3 v3.0.1"
+    ]
+  },
+  "configuration": {
+    "tests": {
+      "TestICMPTraceConfiguration": "pass",
+      "TestICMPTraceRequiresListenerReload": "pass",
+      "TestAsyncICMPTraceDoesNotBlockTUNOnDNS": "pass",
+      "TestAsyncICMPTraceSetupFailureNeverReturnsNilDestination": "pass",
+      "TestAsyncICMPTraceCancelAndBoundQueue": "pass"
+    },
+    "packages": {
+      "github.com/metacubex/mihomo/config": "pass",
+      "github.com/metacubex/mihomo/listener/config": "pass",
+      "github.com/metacubex/mihomo/listener/sing_tun": "pass"
+    },
+    "non_json_lines": [
+      "go: downloading github.com/stretchr/testify v1.12.1"
+    ]
+  }
+}

@@ -1,0 +1,230 @@
+[
+  {
+    "case": "rr40",
+    "initial": {
+      "return": 0,
+      "error": 0,
+      "length": 0,
+      "hex": ""
+    },
+    "set": {
+      "return": 0,
+      "error": 0,
+      "pointer_null": false,
+      "length": 40
+    },
+    "after": {
+      "return": 0,
+      "error": 0,
+      "length": 40,
+      "hex": "07270400000000000000000000000000000000000000000000000000000000000000000000000000"
+    }
+  },
+  {
+    "case": "rr39",
+    "initial": {
+      "return": 0,
+      "error": 0,
+      "length": 0,
+      "hex": ""
+    },
+    "set": {
+      "return": 0,
+      "error": 0,
+      "pointer_null": false,
+      "length": 39
+    },
+    "after": {
+      "return": 0,
+      "error": 0,
+      "length": 39,
+      "hex": "072704000000000000000000000000000000000000000000000000000000000000000000000000"
+    }
+  },
+  {
+    "case": "rr3",
+    "initial": {
+      "return": 0,
+      "error": 0,
+      "length": 0,
+      "hex": ""
+    },
+    "set": {
+      "return": -1,
+      "error": 10022,
+      "pointer_null": false,
+      "length": 3
+    },
+    "after": {
+      "return": 0,
+      "error": 0,
+      "length": 0,
+      "hex": ""
+    }
+  },
+  {
+    "case": "reset_null0",
+    "initial": {
+      "return": 0,
+      "error": 0,
+      "length": 0,
+      "hex": ""
+    },
+    "prime_record_route": {
+      "return": 0,
+      "error": 0,
+      "pointer_null": false,
+      "length": 40
+    },
+    "primed_options": {
+      "return": 0,
+      "error": 0,
+      "length": 40,
+      "hex": "07270400000000000000000000000000000000000000000000000000000000000000000000000000"
+    },
+    "set": {
+      "return": -1,
+      "error": 10014,
+      "pointer_null": true,
+      "length": 0
+    },
+    "after": {
+      "return": 0,
+      "error": 0,
+      "length": 40,
+      "hex": "07270400000000000000000000000000000000000000000000000000000000000000000000000000"
+    }
+  },
+  {
+    "case": "reset_nonnull0",
+    "initial": {
+      "return": 0,
+      "error": 0,
+      "length": 0,
+      "hex": ""
+    },
+    "prime_record_route": {
+      "return": 0,
+      "error": 0,
+      "pointer_null": false,
+      "length": 40
+    },
+    "primed_options": {
+      "return": 0,
+      "error": 0,
+      "length": 40,
+      "hex": "07270400000000000000000000000000000000000000000000000000000000000000000000000000"
+    },
+    "set": {
+      "return": 0,
+      "error": 0,
+      "pointer_null": false,
+      "length": 0
+    },
+    "after": {
+      "return": 0,
+      "error": 0,
+      "length": 0,
+      "hex": ""
+    }
+  },
+  {
+    "case": "reset_eol1",
+    "initial": {
+      "return": 0,
+      "error": 0,
+      "length": 0,
+      "hex": ""
+    },
+    "prime_record_route": {
+      "return": 0,
+      "error": 0,
+      "pointer_null": false,
+      "length": 40
+    },
+    "primed_options": {
+      "return": 0,
+      "error": 0,
+      "length": 40,
+      "hex": "07270400000000000000000000000000000000000000000000000000000000000000000000000000"
+    },
+    "set": {
+      "return": -1,
+      "error": 10022,
+      "pointer_null": false,
+      "length": 1
+    },
+    "after": {
+      "return": 0,
+      "error": 0,
+      "length": 40,
+      "hex": "07270400000000000000000000000000000000000000000000000000000000000000000000000000"
+    }
+  },
+  {
+    "case": "reset_zeros4",
+    "initial": {
+      "return": 0,
+      "error": 0,
+      "length": 0,
+      "hex": ""
+    },
+    "prime_record_route": {
+      "return": 0,
+      "error": 0,
+      "pointer_null": false,
+      "length": 40
+    },
+    "primed_options": {
+      "return": 0,
+      "error": 0,
+      "length": 40,
+      "hex": "07270400000000000000000000000000000000000000000000000000000000000000000000000000"
+    },
+    "set": {
+      "return": 0,
+      "error": 0,
+      "pointer_null": false,
+      "length": 4
+    },
+    "after": {
+      "return": 0,
+      "error": 0,
+      "length": 1,
+      "hex": "00"
+    }
+  },
+  {
+    "case": "reset_null4",
+    "initial": {
+      "return": 0,
+      "error": 0,
+      "length": 0,
+      "hex": ""
+    },
+    "prime_record_route": {
+      "return": 0,
+      "error": 0,
+      "pointer_null": false,
+      "length": 40
+    },
+    "primed_options": {
+      "return": 0,
+      "error": 0,
+      "length": 40,
+      "hex": "07270400000000000000000000000000000000000000000000000000000000000000000000000000"
+    },
+    "set": {
+      "return": -1,
+      "error": 10014,
+      "pointer_null": true,
+      "length": 4
+    },
+    "after": {
+      "return": 0,
+      "error": 0,
+      "length": 40,
+      "hex": "07270400000000000000000000000000000000000000000000000000000000000000000000000000"
+    }
+  }
+]

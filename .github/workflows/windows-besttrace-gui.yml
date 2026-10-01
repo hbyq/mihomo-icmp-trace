@@ -1,12 +1,13 @@
 name: Windows BestTrace cold-start diagnosis
 
 on:
-  push:
-    branches: [codex/windows-icmp-validation]
-    paths:
-      - .github/workflows/windows-besttrace-gui.yml
-      - scripts/windows/besttrace_gui.py
   workflow_dispatch:
+    inputs:
+      tested_run_id:
+        description: 'A recent Windows validation run containing windows-tested-kernel (artifacts expire after 7 days)'
+        required: true
+        default: '36913225840'
+        type: string
 
 permissions:
   contents: read
@@ -32,7 +33,7 @@ jobs:
       - uses: actions/download-artifact@v4
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
-          run-id: 36908531308
+          run-id: ${{ inputs.tested_run_id }}
           name: windows-tested-kernel
           path: dist
       - name: Install dependencies and official BestTrace
