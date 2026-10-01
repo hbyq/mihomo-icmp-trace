@@ -7,6 +7,7 @@ param(
     [string]$OutputDir = 'windows-validation',
     [string[]]$Targets = @('1.1.1.1', '8.8.8.8'),
     [ValidateRange(15, 120)][int]$BestTraceTimeout = 90,
+    [ValidateRange(0, 1000)][double]$FixtureReplyDelayMs = 5,
     [switch]$SkipPacketCapture,
     [switch]$UseFixture,
     [switch]$AllowIcmpErrors,
@@ -107,6 +108,32 @@ function Save-IcmpFirewallRules([string]$Directory, [string]$Stem) {
         $result.rules = @($rows.ToArray()); $result.status = 'recorded'
     } catch { $result.error = $_.Exception.Message }
     Write-Json $result $result.path
+    return $result
+}
+
+function Save-BestTraceApplicationEvents([string]$Directory, [double]$StartedAt) {
+    $from = [DateTimeOffset]::FromUnixTimeMilliseconds([long]($StartedAt * 1000)).UtcDateTime
+    $until = [DateTime]::UtcNow
+    $path = Join-Path $Directory 'besttrace-application-events.json'
+    $result = [ordered]@{
+        status = 'recorded'; path = $path; from_utc = $from.ToString('o'); until_utc = $until.ToString('o')
+        log_name = 'Application'; event_ids = @(1000, 1001); event_count = 0; events = @(); error = $null
+    }
+    try {
+        # A clean exit or absent WER event is evidence, not a test failure.
+        $events = @(Get-WinEvent -FilterHashtable @{
+            LogName = 'Application'; Id = @(1000, 1001); StartTime = $from; EndTime = $until
+        } -MaxEvents 100 -ErrorAction SilentlyContinue | Where-Object {
+            $_.Message -match '(?i)17monipdb|besttrace'
+        } | Select-Object -First 20)
+        $result.events = @($events | ForEach-Object {
+            [ordered]@{ id = $_.Id; record_id = $_.RecordId; at = $_.TimeCreated.ToUniversalTime().ToString('o')
+                provider = $_.ProviderName; level = $_.LevelDisplayName; message = $_.Message }
+        })
+        $result.event_count = $result.events.Count
+    } catch { $result.status = 'unavailable'; $result.error = $_.Exception.Message }
+    Write-Json $result $path
+    $result.Remove('events')
     return $result
 }
 
@@ -401,6 +428,7 @@ function Run-Scenario([string]$Name, [string]$Target, $PhysicalExit, [string]$St
         directory = $directory; fixture_checks = $null; fixture_evidence = $null; tun_addresses = @()
         ip_statistics = [ordered]@{ before = $null; after = $null; unknown_protocol_delta = $null }
         icmp_firewall_changes = [ordered]@{ before_path = $null; after_path = $null; added_rules = @(); removed_rule_names = @() }
+        besttrace_application_events = $null
         tun_restoration = [ordered]@{ required = [bool]($UseFixture -and $TraceEnabled); passed = $false; routers = @(); reason = $null }
         cleanup = [ordered]@{ graceful_tun_disable = $false; residual_target_routes = @(); error = $null }
     }
@@ -572,6 +600,7 @@ rules:
         if ($result.ip_statistics.before.status -eq 'recorded' -and $result.ip_statistics.after.status -eq 'recorded') {
             $result.ip_statistics.unknown_protocol_delta = $result.ip_statistics.after.received_unknown_protocol - $result.ip_statistics.before.received_unknown_protocol
         }
+        $result.besttrace_application_events = Save-BestTraceApplicationEvents $directory $scenarioStartedAt
         Write-Json $result (Join-Path $directory 'scenario-result.json')
         $script:Results.Add($result)
     }
@@ -648,7 +677,8 @@ try {
         $fixtureExit = Get-PhysicalExit $Targets[0]
         $script:FixtureProcess = Start-CapturedProcess 'python' @($fixtureHelper, '--target', $Targets[0],
             '--interface-index', [string]$fixtureExit.index, '--output-dir', $script:FixtureDirectory,
-            '--stop-file', $script:FixtureStopFile, '--duration', '900') $script:FixtureDirectory 'fixture'
+            '--stop-file', $script:FixtureStopFile, '--duration', '900',
+            '--reply-delay-ms', [string]$FixtureReplyDelayMs) $script:FixtureDirectory 'fixture'
         $readyPath = Join-Path $script:FixtureDirectory 'ready.json'
         $deadline = [DateTime]::UtcNow.AddSeconds(20)
         while (-not (Test-Path $readyPath) -and [DateTime]::UtcNow -lt $deadline -and -not $script:FixtureProcess.HasExited) {

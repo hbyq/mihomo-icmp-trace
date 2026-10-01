@@ -33,7 +33,8 @@ def main():
     config = inspect(args.configuration)
     required = ["TestTraceRestore", "TestTraceRejectUnrelatedAndMalformed",
                 "TestTraceLoopback/127.0.0.1", "TestTraceLoopback/::1",
-                "TestTraceHopBudgetOnWire"]
+                "TestTraceHopBudgetOnWire", "TestTraceRecordRouteValidation",
+                "TestTraceRecordRouteRestore", "TestTraceRecordRouteLoopback"]
     problems = [f"{name}: {raw['tests'].get(name, 'not executed')}" for name in required
                 if raw["tests"].get(name) != "pass"]
     for section in (raw, config):

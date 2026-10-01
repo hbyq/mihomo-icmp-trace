@@ -13,6 +13,9 @@ display the path. Selecting the actual physical adapter is essential.
 
 This is a synthetic path (192.0.2.1, 192.0.2.2, target), not proof of public
 Internet traceroute. Keep its results separate from public path tests.
+Replies wait 5 ms by default so clients observe a nonzero round-trip time;
+--reply-delay-ms 0 explicitly exercises immediate replies. Packet timestamps
+record userspace capture and injection, not hardware arrival times.
 
 Example:
   python icmp_fixture.py --interface-index 6 --output-dir fixture \
@@ -26,6 +29,7 @@ import argparse
 import importlib.metadata
 import ipaddress
 import json
+import math
 import os
 from pathlib import Path
 import signal
@@ -39,6 +43,13 @@ from typing import BinaryIO
 
 DEFAULT_TARGET = "203.0.113.77"
 HOPS = ("192.0.2.1", "192.0.2.2")
+
+
+def reply_delay(value: str) -> float:
+    delay = float(value)
+    if not math.isfinite(delay) or not 0 <= delay <= 1000:
+        raise argparse.ArgumentTypeError("reply delay must be between 0 and 1000 ms")
+    return delay
 
 
 def checksum(data: bytes) -> int:
@@ -234,7 +245,7 @@ def run(args) -> int:
             "pid": os.getpid(), "target": args.target,
             "interface_index": args.interface_index, "synthetic_hops": [*HOPS, args.target],
             "filter": filter_text, "pydivert_version": importlib.metadata.version("pydivert"),
-            "started_at": started,
+            "started_at": started, "reply_delay_ms": args.reply_delay_ms,
         }
         (output / "ready.json").write_text(json.dumps(ready, indent=2) + "\n", encoding="utf-8")
         log("ready", **ready)
@@ -250,6 +261,7 @@ def run(args) -> int:
                 raise
             raw = bytes(packet.raw)
             observed_at = time.time()
+            observed_monotonic = time.monotonic()
             interface = tuple(packet.interface)
             if interface[0] != args.interface_index:
                 counts["passthrough"] += 1
@@ -259,17 +271,26 @@ def run(args) -> int:
                 continue
             counts["captured"] += 1
             probe = parse_echo(raw)
-            log("physical_egress_echo", interface=interface, probe=probe, raw_hex=raw.hex(),
+            log("physical_egress_echo", timestamp=observed_at, capture_timestamp=observed_at,
+                interface=interface, probe=probe, raw_hex=raw.hex(),
                 pcap_index=pcap.write(raw, observed_at))
             reply, info, normalized = make_reply(raw, counts["captured"])
             injected = pydivert.Packet(reply, interface, pydivert.Direction.INBOUND)
+            if stop.wait(args.reply_delay_ms / 1000):
+                break
             # Checksums are already correct, including the inner quoted IP header.
+            send_started_at = time.time()
             sent = handle.send(injected, recalculate_checksum=False).value
+            injected_at = time.time()
+            capture_to_injection_ms = (time.monotonic() - observed_monotonic) * 1000
             if sent != len(reply):
                 raise RuntimeError(f"short WinDivertSend: {sent}/{len(reply)}")
             counts["replied"] += 1
-            log("injected_reply", interface=interface, reply=info, raw_hex=reply.hex(),
-                normalized_egress_hex=normalized.hex(), pcap_index=pcap.write(reply, time.time()))
+            log("injected_reply", timestamp=injected_at, capture_timestamp=observed_at,
+                send_started_timestamp=send_started_at, reply_delay_ms=args.reply_delay_ms,
+                capture_to_injection_ms=capture_to_injection_ms,
+                interface=interface, reply=info, raw_hex=reply.hex(),
+                normalized_egress_hex=normalized.hex(), pcap_index=pcap.write(reply, injected_at))
     except Exception as error:
         counts["errors"] += 1
         outcome = "failed"
@@ -280,6 +301,7 @@ def run(args) -> int:
         close_handle()
         summary = {"outcome": outcome, "synthetic": True, "target": args.target,
                    "interface_index": args.interface_index, "counts": counts,
+                   "reply_delay_ms": args.reply_delay_ms,
                    "started_at": started, "finished_at": time.time()}
         log("summary", **summary)
         (output / "summary.json").write_text(json.dumps(summary, indent=2) + "\n", encoding="utf-8")
@@ -295,6 +317,8 @@ def main() -> int:
     parser.add_argument("--output-dir", type=Path, default=Path("fixture"))
     parser.add_argument("--stop-file", type=Path, help="creating this file closes the capture gracefully")
     parser.add_argument("--duration", type=float, default=900, help="maximum seconds; 0 disables the deadline")
+    parser.add_argument("--reply-delay-ms", type=reply_delay, default=5.0,
+                        help="synthetic reply delay in milliseconds (0..1000; default: 5)")
     parser.add_argument("--self-test", action="store_true", help="packet-only checks; no driver or Windows needed")
     args = parser.parse_args()
     if args.self_test:

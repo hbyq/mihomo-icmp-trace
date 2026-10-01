@@ -243,6 +243,18 @@ def main():
     preexisting_pids = set()
     owned_pids = set()
     executable = args.exe.resolve()
+    completed_screenshot = False
+    trace_process_handle = None
+
+    def record_trace_exit():
+        if trace_process_handle:
+            code = ctypes.c_uint32()
+            kernel = ctypes.windll.kernel32
+            kernel.GetExitCodeProcess.argtypes = [ctypes.c_void_p, ctypes.POINTER(ctypes.c_uint32)]
+            if kernel.GetExitCodeProcess(trace_process_handle, ctypes.byref(code)) and code.value != 259:
+                result["trace_process_exited"] = True
+                result["trace_process_exit_code"] = int(code.value)
+                result["trace_process_exit_code_hex"] = f"0x{code.value:08X}"
 
     def windows():
         processes = matching_processes(executable)
@@ -253,8 +265,31 @@ def main():
         return [window for window in desktop.windows(visible_only=False)
                 if window.element_info.process_id in candidates]
 
+    def capture_screenshot(label, primary, focus=False):
+        """Capture before lengthy enumeration, while a fast trace still exists."""
+        screenshot_ok = False
+        if primary is not None:
+            try:
+                if focus:
+                    safe(primary.restore)
+                    safe(primary.set_focus)
+                shot = primary.capture_as_image()
+                if shot is None:
+                    raise RuntimeError("capture_as_image returned no image")
+                path = out / f"{label}.png"
+                shot.save(path)
+                result["screenshot_paths"].append(str(path))
+                extrema = shot.convert("RGB").getextrema()
+                screenshot_ok = min(shot.size) >= 100 and any(lo != hi for lo, hi in extrema)
+                if not screenshot_ok:
+                    result["errors"].append(f"{label}: screenshot blank or too small")
+            except Exception as exc:
+                result["errors"].append(f"{label}: screenshot capture: {exc}")
+        return screenshot_ok
+
     def evidence(label, primary=None):
         """Always retain readable trees; a screenshot is independently checked."""
+        screenshot_ok = capture_screenshot(label, primary, focus=True)
         trees = []
         for window in safe(windows, []):
             controls = safe(window.descendants, [])[:1500]
@@ -269,25 +304,6 @@ def main():
         (out / f"{label}-controls.txt").write_text(
             "\n\n".join(json.dumps(tree, ensure_ascii=False, indent=2) for tree in trees),
             encoding="utf-8")
-        screenshot_ok = False
-        if primary is not None:
-            try:
-                # Focus is best effort. Control automation above uses messages,
-                # rather than assuming that keyboard/mouse input is possible.
-                safe(primary.restore)
-                safe(primary.set_focus)
-                shot = primary.capture_as_image()
-                if shot is None:
-                    raise RuntimeError("capture_as_image returned no image")
-                path = out / f"{label}.png"
-                shot.save(path)
-                result["screenshot_paths"].append(str(path))
-                extrema = shot.convert("RGB").getextrema()
-                screenshot_ok = min(shot.size) >= 100 and any(lo != hi for lo, hi in extrema)
-                if not screenshot_ok:
-                    result["errors"].append(f"{label}: screenshot blank or too small")
-            except Exception as exc:
-                result["errors"].append(f"{label}: screenshot capture: {exc}")
         return screenshot_ok
 
     try:
@@ -363,6 +379,10 @@ def main():
             raise Blocked("BestTrace trace dialog was unavailable; see process window/control dump")
         evidence("trace-ready", trace_window)
         result["trace_pid"] = int(trace_window.element_info.process_id)
+        # Hold the process object so an unexpected close retains its real exit
+        # code (normal auto-close versus a crash), even after its PID disappears.
+        trace_process_handle = ctypes.windll.kernel32.OpenProcess(
+            0x1000, False, result["trace_pid"])
 
         vantage = by_id(trace_window, CONTROL_IDS["vantage"], "Button")
         vantage_text = safe(vantage.window_text, "") if vantage is not None else ""
@@ -435,6 +455,10 @@ def main():
         seen_new_rows = False
         table_errors = []
         while time.monotonic() < deadline:
+            if process_image(result["trace_pid"]) is None:
+                result["trace_process_exited"] = True
+                record_trace_exit()
+                break
             caption = normalize(safe(run_button.window_text, ""))
             enabled = safe(run_button.is_enabled, False)
             is_busy = caption in busy_captions
@@ -451,12 +475,24 @@ def main():
                     table_errors.append(str(exc))
             idle = enabled and caption in {normalize("Start"), normalize("开始")}
             stable = time.monotonic() - last_change >= 3
-            # Busy->idle is direct completion evidence. Extremely quick traces
-            # may finish between polls; then require new stable result rows.
-            if idle and ((result["busy_observed"] and stable) or
+            target_in_rows = target in addresses("\n".join(row["text"] for row in result["rows"]))
+            # Busy->idle is direct completion evidence and needs no extra 3s
+            # wait. For a sub-poll-duration trace, require new rows containing
+            # an actual target response plus the Start/idle state.
+            if idle and (result["busy_observed"] or
+                         (seen_new_rows and target_in_rows) or
                          (seen_new_rows and result["rows"] and stable)):
                 result["trace_completed"] = True
-                result["completion_evidence"] = "busy_to_idle" if result["busy_observed"] else "new_rows_stable_start_idle"
+                result["completion_evidence"] = "busy_to_idle" if result["busy_observed"] else (
+                    "new_target_rows_start_idle" if target_in_rows else "new_rows_stable_start_idle")
+                # Keep an actual completed-window screenshot immediately, not
+                # a partial-row screenshot or an earlier startup image.
+                completed_screenshot = capture_screenshot("completed", trace_window)
+                (out / "completed-result.json").write_text(json.dumps({
+                    "trace_completed": True, "completion_evidence": result["completion_evidence"],
+                    "rows": result["rows"], "screenshot_captured": completed_screenshot,
+                    "screenshot": str(out / "completed.png") if completed_screenshot else None,
+                }, ensure_ascii=False, indent=2), encoding="utf-8")
                 break
             time.sleep(0.25)
         result["elapsed_seconds"] = round(time.monotonic() - started, 3)
@@ -464,8 +500,13 @@ def main():
         hops, observed, intermediate = classify_rows(result["rows"], target)
         result.update(hops=hops, observed_addresses=observed, intermediate_hops=intermediate,
                       target_observed=target in observed)
-        result["screenshot_captured"] = evidence("final", trace_window)
+        final_screenshot = evidence("final", trace_window)
+        result["screenshot_captured"] = final_screenshot or completed_screenshot
+        result["completed_screenshot_captured"] = completed_screenshot
+        record_trace_exit()
         (out / "rows.tsv").write_text("\n".join(row["text"] for row in result["rows"]), encoding="utf-8")
+        if result.get("trace_process_exited") and not result["trace_completed"]:
+            raise RuntimeError("BestTrace trace process exited before a completed result could be verified")
         if not result["screenshot_captured"]:
             raise Blocked("Actual BestTrace final window screenshot could not be captured")
         if table_errors and not result["rows"]:
@@ -497,6 +538,8 @@ def main():
                 path = safe(lambda: process_image(pid))
                 if path and os.path.normcase(os.path.abspath(path)) == os.path.normcase(str(executable)):
                     safe(lambda: Application(backend="win32").connect(process=pid).kill(soft=False))
+        if trace_process_handle:
+            safe(lambda: ctypes.windll.kernel32.CloseHandle(trace_process_handle))
         result["finished_at"] = dt.datetime.now(dt.timezone.utc).isoformat()
         (out / "result.json").write_text(json.dumps(result, ensure_ascii=False, indent=2), encoding="utf-8")
         print(json.dumps({"status": result["status"], "reason": result["reason"],

@@ -1,9 +1,9 @@
 diff --git a/ping/trace.go b/ping/trace.go
 new file mode 100644
-index 0000000..b6514cf
+index 0000000..b988e82
 --- /dev/null
 +++ b/ping/trace.go
-@@ -0,0 +1,428 @@
+@@ -0,0 +1,485 @@
 +package ping
 +
 +// Experimental transparent Echo/ICMP-error forwarding. Unlike the legacy ping
@@ -15,6 +15,7 @@ index 0000000..b6514cf
 +	"context"
 +	"encoding/binary"
 +	"errors"
++	"fmt"
 +	"net"
 +	"net/netip"
 +	"runtime"
@@ -84,6 +85,7 @@ index 0000000..b6514cf
 +	timeout       time.Duration
 +	closed        atomic.Bool
 +	writeMu       sync.Mutex
++	ipv4Options   bool
 +	mu            sync.Mutex
 +	probes        map[uint16]traceProbe
 +}
@@ -193,6 +195,42 @@ index 0000000..b6514cf
 +	}
 +}
 +
++// Accept Record Route plus its NOP/EOL padding. Source-routing and other
++// options would change the forwarding contract and remain unsupported.
++func traceIPv4Options(options []byte) error {
++	if len(options) > 40 || len(options)%4 != 0 {
++		return errors.New("invalid ICMP trace IPv4 option length")
++	}
++	recordRoute := false
++	for i := 0; i < len(options); {
++		switch options[i] {
++		case 0: // End of option list; remaining bytes are padding.
++			for _, padding := range options[i:] {
++				if padding != 0 {
++					return errors.New("invalid ICMP trace IPv4 option padding")
++				}
++			}
++			return nil
++		case 1: // No operation.
++			i++
++		case 7: // Record Route, RFC 791.
++			if recordRoute || i+3 > len(options) {
++				return errors.New("invalid ICMP trace IPv4 Record Route option")
++			}
++			length, pointer := int(options[i+1]), int(options[i+2])
++			if length < 3 || length > len(options)-i || (length-3)%4 != 0 ||
++				pointer < 4 || pointer > length+1 || (pointer-4)%4 != 0 {
++				return errors.New("invalid ICMP trace IPv4 Record Route length or pointer")
++			}
++			recordRoute = true
++			i += length
++		default:
++			return fmt.Errorf("unsupported ICMP trace IPv4 option type %d", options[i])
++		}
++	}
++	return nil
++}
++
 +func (d *TraceDestination) WritePacket(packet *buf.Buffer) error {
 +	defer packet.Release()
 +	p := packet.Bytes()
@@ -204,13 +242,32 @@ index 0000000..b6514cf
 +	if target.Is6() {
 +		echoType, hop = 128, int(p[7])
 +	}
-+	if target != d.visibleTarget || p[off] != echoType || p[off+1] != 0 || hop == 0 || (target.Is4() && off != 20) {
-+		return errors.New("ICMP trace supports unfragmented Echo requests without IP options only")
++	if target != d.visibleTarget {
++		return fmt.Errorf("ICMP trace target %s does not match session %s", target, d.visibleTarget)
++	}
++	if p[off] != echoType || p[off+1] != 0 {
++		return fmt.Errorf("ICMP trace requires Echo request type/code %d/0, got %d/%d", echoType, p[off], p[off+1])
++	}
++	if hop == 0 {
++		return errors.New("ICMP trace requires a nonzero hop budget")
++	}
++	if target.Is4() {
++		if err := traceIPv4Options(p[20:off]); err != nil {
++			return err
++		}
 +	}
 +	d.writeMu.Lock()
 +	defer d.writeMu.Unlock()
 +	if d.closed.Load() {
 +		return net.ErrClosed
++	}
++	if target.Is4() && (off > 20 || d.ipv4Options) {
++		// IP_OPTIONS is socket state, just like TTL. Apply/reset it while
++		// holding the send lock so one probe cannot affect another probe.
++		if err := setTraceIPv4Options(d.conn, p[20:off]); err != nil {
++			return fmt.Errorf("set ICMP trace IPv4 options: %w", err)
++		}
++		d.ipv4Options = off > 20
 +	}
 +	// TTL is a socket option. Serialize setting it with sending the packet, so
 +	// simultaneous probes with different TTLs cannot race each other.
@@ -318,7 +375,7 @@ index 0000000..b6514cf
 +			copy(quoted[24:40], probe.target.AsSlice())
 +		}
 +	}
-+	originalOffset := 20
++	originalOffset := int(probe.header[0]&15) * 4
 +	if probe.target.Is6() {
 +		originalOffset = 40
 +	}
@@ -434,28 +491,44 @@ index 0000000..b6514cf
 +var _ tun.DirectRouteDestination = (*TraceDestination)(nil)
 diff --git a/ping/trace_control_unix.go b/ping/trace_control_unix.go
 new file mode 100644
-index 0000000..139d004
+index 0000000..1482a29
 --- /dev/null
 +++ b/ping/trace_control_unix.go
-@@ -0,0 +1,12 @@
+@@ -0,0 +1,28 @@
 +//go:build unix
 +
 +package ping
 +
 +import (
 +	"golang.org/x/net/ipv6"
++	"golang.org/x/sys/unix"
 +	"net"
 +)
 +
 +func enableTraceIPv6Control(conn *net.IPConn) error {
 +	return ipv6.NewPacketConn(conn).SetControlMessage(ipv6.FlagHopLimit, true)
 +}
++
++func setTraceIPv4Options(conn *net.IPConn, options []byte) error {
++	raw, err := conn.SyscallConn()
++	if err != nil {
++		return err
++	}
++	var socketErr error
++	err = raw.Control(func(fd uintptr) {
++		socketErr = unix.SetsockoptString(int(fd), unix.IPPROTO_IP, unix.IP_OPTIONS, string(options))
++	})
++	if err != nil {
++		return err
++	}
++	return socketErr
++}
 diff --git a/ping/trace_control_windows.go b/ping/trace_control_windows.go
 new file mode 100644
-index 0000000..5242b81
+index 0000000..69ce353
 --- /dev/null
 +++ b/ping/trace_control_windows.go
-@@ -0,0 +1,21 @@
+@@ -0,0 +1,43 @@
 +package ping
 +
 +import (
@@ -477,12 +550,100 @@ index 0000000..5242b81
 +	}
 +	return socketErr
 +}
++
++func setTraceIPv4Options(conn *net.IPConn, options []byte) error {
++	raw, err := conn.SyscallConn()
++	if err != nil {
++		return err
++	}
++	var socketErr error
++	var optionPtr *byte
++	if len(options) != 0 {
++		optionPtr = &options[0]
++	}
++	err = raw.Control(func(fd uintptr) {
++		// Winsock IP_OPTIONS (1) inserts these options into outgoing IPv4
++		// packets. A nil pointer and zero length clears previous options.
++		socketErr = windows.Setsockopt(windows.Handle(fd), windows.IPPROTO_IP, 1,
++			optionPtr, int32(len(options)))
++	})
++	if err != nil {
++		return err
++	}
++	return socketErr
++}
+diff --git a/ping/trace_options_unix_test.go b/ping/trace_options_unix_test.go
+new file mode 100644
+index 0000000..cafb252
+--- /dev/null
++++ b/ping/trace_options_unix_test.go
+@@ -0,0 +1,25 @@
++//go:build unix
++
++package ping
++
++import (
++	"net"
++
++	"golang.org/x/sys/unix"
++)
++
++func testTraceReadIPv4Options(conn *net.IPConn) ([]byte, error) {
++	raw, err := conn.SyscallConn()
++	if err != nil {
++		return nil, err
++	}
++	var options string
++	var socketErr error
++	err = raw.Control(func(fd uintptr) {
++		options, socketErr = unix.GetsockoptString(int(fd), unix.IPPROTO_IP, unix.IP_OPTIONS)
++	})
++	if err != nil {
++		return nil, err
++	}
++	return []byte(options), socketErr
++}
+diff --git a/ping/trace_options_windows_test.go b/ping/trace_options_windows_test.go
+new file mode 100644
+index 0000000..ca478a4
+--- /dev/null
++++ b/ping/trace_options_windows_test.go
+@@ -0,0 +1,29 @@
++package ping
++
++import (
++	"net"
++	"unsafe"
++
++	"golang.org/x/sys/windows"
++)
++
++func testTraceReadIPv4Options(conn *net.IPConn) ([]byte, error) {
++	raw, err := conn.SyscallConn()
++	if err != nil {
++		return nil, err
++	}
++	options := make([]byte, 40)
++	length := int32(len(options))
++	var socketErr error
++	err = raw.Control(func(fd uintptr) {
++		socketErr = windows.Getsockopt(windows.Handle(fd), windows.IPPROTO_IP, 1,
++			(*byte)(unsafe.Pointer(unsafe.SliceData(options))), &length)
++	})
++	if err != nil {
++		return nil, err
++	}
++	if socketErr != nil {
++		return nil, socketErr
++	}
++	return options[:length], nil
++}
 diff --git a/ping/trace_test.go b/ping/trace_test.go
 new file mode 100644
-index 0000000..e2f245a
+index 0000000..258b238
 --- /dev/null
 +++ b/ping/trace_test.go
-@@ -0,0 +1,365 @@
+@@ -0,0 +1,477 @@
 +package ping
 +
 +import (
@@ -657,6 +818,118 @@ index 0000000..e2f245a
 +	}
 +	if _, ok := restoreTraceReply(packet, netip.MustParseAddr("203.0.113.20"), func(uint16, uint16) (traceProbe, bool) { return traceProbe{}, false }); ok {
 +		t.Fatal("accepted unknown probe")
++	}
++}
++
++func testTraceRecordRoute(packet []byte) []byte {
++	p := make([]byte, len(packet)+40)
++	copy(p, packet[:20])
++	p[0] = 0x4f
++	p[20], p[21], p[22] = 7, 39, 4
++	copy(p[60:], packet[20:])
++	binary.BigEndian.PutUint16(p[2:4], uint16(len(p)))
++	traceChecksums(p, 60)
++	return p
++}
++
++func TestTraceRecordRouteValidation(t *testing.T) {
++	options := make([]byte, 40)
++	options[0], options[1] = 7, 39
++	for pointer := byte(4); pointer <= 40; pointer += 4 {
++		options[2] = pointer
++		if err := traceIPv4Options(options); err != nil {
++			t.Fatalf("valid pointer %d: %v", pointer, err)
++		}
++	}
++	for _, invalid := range [][]byte{
++		{7, 2, 4, 0}, {7, 7, 4, 0}, {7, 3, 5, 0}, {7, 3, 0, 0},
++		{7, 3, 8, 0}, {131, 3, 4, 0}, {137, 3, 4, 0}, {68, 3, 4, 0},
++		{0, 1, 0, 0}, {7, 3, 4, 7, 3, 4, 0, 0}, {7, 3, 4},
++	} {
++		if err := traceIPv4Options(invalid); err == nil {
++			t.Fatalf("invalid/unsupported options accepted: %v", invalid)
++		}
++	}
++	if err := traceIPv4Options([]byte{1, 1, 0, 0}); err != nil {
++		t.Fatal("valid NOP/EOL padding rejected")
++	}
++}
++
++func TestTraceRecordRouteRestore(t *testing.T) {
++	original := testTraceRecordRoute(testTracePacket("198.18.0.1", "198.18.0.50", 2, testTraceEcho(false, 123, 456, false)))
++	probe := traceProbe{header: original[:68], source: netip.MustParseAddr("198.18.0.1"),
++		target: netip.MustParseAddr("198.18.0.50"), sequence: 456}
++	for _, echo := range []bool{false, true} {
++		var packet []byte
++		if echo {
++			// A valid responder may omit RR options in the outer Echo reply.
++			packet = testTracePacket("203.0.113.20", "192.0.2.10", 51, testTraceEcho(false, 789, 456, true))
++		} else {
++			quote := testTraceRecordRoute(testTracePacket("192.0.2.10", "203.0.113.20", 1, testTraceEcho(false, 789, 456, false)))
++			body := make([]byte, 8+68)
++			body[0] = 11
++			copy(body[8:], quote[:68])
++			packet = testTracePacket("192.0.2.1", "192.0.2.10", 51, body)
++		}
++		restored, ok := restoreTraceReply(packet, netip.MustParseAddr("203.0.113.20"),
++			func(id, seq uint16) (traceProbe, bool) { return probe, id == 789 && seq == 456 })
++		if !ok {
++			t.Fatal("valid RR response rejected")
++		}
++		icmp := restored[20:]
++		if !echo {
++			icmp = icmp[8+60:]
++		}
++		if binary.BigEndian.Uint16(icmp[4:6]) != 123 || binary.BigEndian.Uint16(icmp[6:8]) != 456 {
++			t.Fatal("RR response original identifier/sequence not restored")
++		}
++		if !echo && string(icmp[2:8]) != string(original[62:68]) {
++			t.Fatal("RR error quote original ICMP checksum/header not restored")
++		}
++		if traceChecksum(restored[:20]) != 0 || traceChecksum(restored[20:]) != 0 {
++			t.Fatal("invalid RR response checksum")
++		}
++	}
++}
++
++func TestTraceRecordRouteLoopback(t *testing.T) {
++	addr := netip.MustParseAddr("127.0.0.1")
++	c := make(traceTestContext, 16)
++	destination, err := ConnectTraceDestination(context.Background(), logger.NOP(), nil, addr, addr, c, 5*time.Second)
++	if err != nil {
++		t.Skipf("raw ICMP socket unavailable: %v", err)
++	}
++	defer destination.Close()
++	d := destination.(*TraceDestination)
++	for _, withOptions := range []bool{true, false} {
++		request := testTracePacket(addr.String(), addr.String(), 7, testTraceEcho(false, 123, 456, false))
++		if withOptions {
++			request = testTraceRecordRoute(request)
++		}
++		if err := d.WritePacket(buf.As(request).ToOwned()); err != nil {
++			t.Fatal(err)
++		}
++		options, err := testTraceReadIPv4Options(d.conn)
++		if err != nil {
++			t.Fatal(err)
++		}
++		if withOptions {
++			if len(options) < 3 || options[0] != 7 || options[1] != 39 {
++				t.Fatalf("Record Route not set on real socket: %v", options)
++			}
++		} else if len(options) != 0 {
++			t.Fatalf("Record Route leaked into subsequent normal probe: %v", options)
++		}
++		select {
++		case reply := <-c:
++			off, _, _, err := traceIP(reply, false)
++			if err != nil || reply[off] != 0 || binary.BigEndian.Uint16(reply[off+4:off+6]) != 123 ||
++				binary.BigEndian.Uint16(reply[off+6:off+8]) != 456 {
++				t.Fatal("real RR/normal Echo reply does not match original probe")
++			}
++		case <-time.After(3 * time.Second):
++			t.Fatal("no real RR/normal loopback reply")
++		}
 +	}
 +}
 +

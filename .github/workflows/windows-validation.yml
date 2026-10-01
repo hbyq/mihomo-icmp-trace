@@ -44,7 +44,7 @@ jobs:
         shell: bash
         run: |
           set +e
-          (cd work/sing-tun && go test -count=1 -json ./ping -run '^TestTrace(Restore|RejectUnrelatedAndMalformed|Loopback|HopBudgetOnWire)$') > evidence/transport.jsonl 2>&1
+          (cd work/sing-tun && go test -count=1 -json ./ping -run '^TestTrace(Restore|RejectUnrelatedAndMalformed|Loopback|HopBudgetOnWire|RecordRoute(Validation|Restore|Loopback))$') > evidence/transport.jsonl 2>&1
           transport_status=$?
           (cd work/mihomo && go test -count=1 -json -tags with_gvisor ./config ./listener/config ./listener/sing_tun -run '^(TestICMPTrace|TestAsyncICMPTrace)') > evidence/configuration.jsonl 2>&1
           configuration_status=$?
@@ -73,12 +73,12 @@ jobs:
     runs-on: windows-2022
     # Default-firewall behavior is diagnostic; both explicit-rule variants
     # remain required and must satisfy full GUI/API/TUN-packet validation.
-    continue-on-error: ${{ matrix.mode == 'fixture' }}
+    continue-on-error: ${{ matrix.mode == 'fixture' || matrix.mode == 'fixture-icmp-zero-delay' }}
     timeout-minutes: 30
     strategy:
       fail-fast: false
       matrix:
-        mode: [public, fixture, fixture-icmp-allow, fixture-icmp-interface]
+        mode: [public, fixture, fixture-icmp-allow, fixture-icmp-interface, fixture-icmp-zero-delay]
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -119,8 +119,9 @@ jobs:
         run: |
           $arguments = @{ KernelPath = (Resolve-Path 'dist/mihomo-windows-amd64-icmp-trace-exp1.exe').Path; BestTracePath = $env:BESTTRACE_EXE; OutputDir = 'evidence/runtime' }
           if ($env:VALIDATION_MODE -like 'fixture*') { $arguments.UseFixture = $true }
-          if ($env:VALIDATION_MODE -in @('fixture-icmp-allow', 'fixture-icmp-interface')) { $arguments.AllowIcmpErrors = $true }
+          if ($env:VALIDATION_MODE -in @('fixture-icmp-allow', 'fixture-icmp-interface', 'fixture-icmp-zero-delay')) { $arguments.AllowIcmpErrors = $true }
           if ($env:VALIDATION_MODE -eq 'fixture-icmp-interface') { $arguments.ScopeIcmpErrorsToInterface = $true }
+          if ($env:VALIDATION_MODE -eq 'fixture-icmp-zero-delay') { $arguments.FixtureReplyDelayMs = 0 }
           & scripts/windows/run_validation.ps1 @arguments
           $validationExit = $LASTEXITCODE
           if ($env:VALIDATION_MODE -eq 'public' -and $validationExit -eq 2) {
