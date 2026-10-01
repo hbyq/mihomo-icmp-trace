@@ -71,11 +71,14 @@ jobs:
     needs: build
     if: ${{ always() && needs.build.outputs.kernel_built == 'true' }}
     runs-on: windows-2022
+    # Default-firewall behavior is diagnostic; both explicit-rule variants
+    # remain required and must satisfy full GUI/API/TUN-packet validation.
+    continue-on-error: ${{ matrix.mode == 'fixture' }}
     timeout-minutes: 30
     strategy:
       fail-fast: false
       matrix:
-        mode: [public, fixture, fixture-icmp-allow]
+        mode: [public, fixture, fixture-icmp-allow, fixture-icmp-interface]
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -116,7 +119,8 @@ jobs:
         run: |
           $arguments = @{ KernelPath = (Resolve-Path 'dist/mihomo-windows-amd64-icmp-trace-exp1.exe').Path; BestTracePath = $env:BESTTRACE_EXE; OutputDir = 'evidence/runtime' }
           if ($env:VALIDATION_MODE -like 'fixture*') { $arguments.UseFixture = $true }
-          if ($env:VALIDATION_MODE -eq 'fixture-icmp-allow') { $arguments.AllowIcmpErrors = $true }
+          if ($env:VALIDATION_MODE -in @('fixture-icmp-allow', 'fixture-icmp-interface')) { $arguments.AllowIcmpErrors = $true }
+          if ($env:VALIDATION_MODE -eq 'fixture-icmp-interface') { $arguments.ScopeIcmpErrorsToInterface = $true }
           & scripts/windows/run_validation.ps1 @arguments
           $validationExit = $LASTEXITCODE
           if ($env:VALIDATION_MODE -eq 'public' -and $validationExit -eq 2) {

@@ -33,6 +33,7 @@ CONTROL_IDS = {
     "tcp": 1059,
     "run": 1064,
     "results": 1013,
+    "clean": 1017,
     "vantage": 1057,
 }
 
@@ -163,6 +164,60 @@ def session_information():
             "is_admin": bool(ctypes.windll.shell32.IsUserAnAdmin())}
 
 
+def process_image(pid):
+    kernel = ctypes.windll.kernel32
+    kernel.OpenProcess.argtypes = [ctypes.c_uint32, ctypes.c_int, ctypes.c_uint32]
+    kernel.OpenProcess.restype = ctypes.c_void_p
+    kernel.QueryFullProcessImageNameW.argtypes = [ctypes.c_void_p, ctypes.c_uint32,
+                                                ctypes.c_wchar_p, ctypes.POINTER(ctypes.c_uint32)]
+    kernel.CloseHandle.argtypes = [ctypes.c_void_p]
+    handle = kernel.OpenProcess(0x1000, False, pid)  # QUERY_LIMITED_INFORMATION
+    if not handle:
+        return None
+    try:
+        size = ctypes.c_uint32(32768)
+        name = ctypes.create_unicode_buffer(size.value)
+        return name.value if kernel.QueryFullProcessImageNameW(handle, 0, name, ctypes.byref(size)) else None
+    finally:
+        kernel.CloseHandle(handle)
+
+
+def matching_processes(executable):
+    """Find the actual application, including separately launched trace GUIs."""
+    from ctypes import wintypes
+
+    class ProcessEntry(ctypes.Structure):
+        _fields_ = [("size", wintypes.DWORD), ("usage", wintypes.DWORD),
+                    ("pid", wintypes.DWORD), ("heap", ctypes.c_size_t),
+                    ("module", wintypes.DWORD), ("threads", wintypes.DWORD),
+                    ("parent_pid", wintypes.DWORD), ("priority", wintypes.LONG),
+                    ("flags", wintypes.DWORD), ("name", wintypes.WCHAR * 260)]
+
+    kernel = ctypes.windll.kernel32
+    kernel.CreateToolhelp32Snapshot.argtypes = [wintypes.DWORD, wintypes.DWORD]
+    kernel.CreateToolhelp32Snapshot.restype = ctypes.c_void_p
+    kernel.Process32FirstW.argtypes = [ctypes.c_void_p, ctypes.POINTER(ProcessEntry)]
+    kernel.Process32NextW.argtypes = [ctypes.c_void_p, ctypes.POINTER(ProcessEntry)]
+    kernel.CloseHandle.argtypes = [ctypes.c_void_p]
+    snapshot = kernel.CreateToolhelp32Snapshot(2, 0)  # TH32CS_SNAPPROCESS
+    if snapshot == ctypes.c_void_p(-1).value:
+        return []
+    found = []
+    try:
+        entry = ProcessEntry()
+        entry.size = ctypes.sizeof(entry)
+        valid = kernel.Process32FirstW(snapshot, ctypes.byref(entry))
+        while valid:
+            if entry.name.casefold() == executable.name.casefold():
+                path = process_image(entry.pid)
+                if path and os.path.normcase(os.path.abspath(path)) == os.path.normcase(str(executable)):
+                    found.append({"pid": int(entry.pid), "parent_pid": int(entry.parent_pid), "exe": path})
+            valid = kernel.Process32NextW(snapshot, ctypes.byref(entry))
+    finally:
+        kernel.CloseHandle(snapshot)
+    return found
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--exe", required=True, type=Path)
@@ -185,19 +240,32 @@ def main():
     app = None
     trace_window = None
     desktop = None
+    preexisting_pids = set()
+    owned_pids = set()
+    executable = args.exe.resolve()
 
     def windows():
-        return desktop.windows(process=result["pid"], visible_only=False)
+        processes = matching_processes(executable)
+        candidates = {item["pid"] for item in processes} - preexisting_pids
+        owned_pids.update(candidates)
+        result["application_processes"] = processes
+        result["owned_pids"] = sorted(owned_pids)
+        return [window for window in desktop.windows(visible_only=False)
+                if window.element_info.process_id in candidates]
 
     def evidence(label, primary=None):
         """Always retain readable trees; a screenshot is independently checked."""
         trees = []
         for window in safe(windows, []):
             controls = safe(window.descendants, [])[:1500]
-            trees.append({"window": describe(window), "controls": [describe(c) for c in controls]})
+            details = describe(window)
+            details["pid"] = window.element_info.process_id
+            trees.append({"window": details, "controls": [describe(c) for c in controls]})
         tree_path = out / f"{label}-controls.json"
         tree_path.write_text(json.dumps(trees, ensure_ascii=False, indent=2), encoding="utf-8")
         result["control_tree_paths"].append(str(tree_path))
+        (out / f"{label}-processes.json").write_text(
+            json.dumps(result.get("application_processes", []), ensure_ascii=False, indent=2), encoding="utf-8")
         (out / f"{label}-controls.txt").write_text(
             "\n\n".join(json.dumps(tree, ensure_ascii=False, indent=2) for tree in trees),
             encoding="utf-8")
@@ -242,6 +310,9 @@ def main():
         except ImportError as exc:
             raise Blocked("Install Python packages pywinauto and Pillow first") from exc
         desktop = Desktop(backend="win32")
+        before = matching_processes(executable)
+        result["preexisting_processes"] = before
+        preexisting_pids.update(item["pid"] for item in before)
         app = Application(backend="win32").start(
             f'"{args.exe.resolve()}"', work_dir=str(args.exe.resolve().parent), timeout=20)
         result["pid"] = app.process
@@ -284,13 +355,14 @@ def main():
                     not result.get("open_trace_retry"):
                 # The window may have appeared before the runner's desktop
                 # accepted focus/input. Retry using the button's native event.
-                launch_button.post_message(0x00F5, 0, 0)
-                result["open_trace_retry"] = "posted_BM_CLICK"
+                main_window.post_message(0x0111, CONTROL_IDS["open_trace"], launch_button.handle)
+                result["open_trace_retry"] = "posted_WM_COMMAND_BN_CLICKED"
             time.sleep(0.25)
         if trace_window is None:
             evidence("startup-blocked", main_window)
             raise Blocked("BestTrace trace dialog was unavailable; see process window/control dump")
         evidence("trace-ready", trace_window)
+        result["trace_pid"] = int(trace_window.element_info.process_id)
 
         vantage = by_id(trace_window, CONTROL_IDS["vantage"], "Button")
         vantage_text = safe(vantage.window_text, "") if vantage is not None else ""
@@ -315,10 +387,14 @@ def main():
 
         combo = by_id(trace_window, CONTROL_IDS["trace_target"], "ComboBox")
         edits = [c for c in combo.descendants() if safe(c.class_name) == "Edit"]
-        if len(edits) == 1:
-            edits[0].set_edit_text(target)
-        else:
-            combo.set_edit_text(target)
+        # Main-window Traceroute can launch a separate process and auto-start
+        # its target. Preserve that real run instead of clicking its Stop button.
+        current_target = safe(combo.window_text, "")
+        if current_target.strip() != target:
+            if len(edits) == 1:
+                edits[0].set_edit_text(target)
+            else:
+                combo.set_edit_text(target)
         entered = safe(combo.window_text, "")
         if target not in entered:
             entered = safe(lambda: edits[0].window_text(), "") if edits else entered
@@ -332,7 +408,25 @@ def main():
             raise Blocked("Cannot identify BestTrace Start button")
         initial_rows = read_rows(trace_window)
         evidence("configured", trace_window)
-        result["start_trace_action"] = activate_button(run_button)
+        busy_captions = {normalize(x) for x in ["Stop", "停止", "Stoping", "Stopping", "停止中"]}
+        if normalize(safe(run_button.window_text, "")) in busy_captions:
+            result["start_trace_action"] = "main_gui_autostart"
+            result["busy_observed"] = True
+        else:
+            # The separately launched trace may already have finished. Clear
+            # its fresh results before rerunning so even a sub-poll-duration
+            # trace can be distinguished from an unchanged initial table.
+            clean = by_id(trace_window, CONTROL_IDS["clean"], "Button") or by_caption(
+                trace_window, ["Clean", "清空"])
+            if clean is not None and initial_rows:
+                result["clear_previous_rows_action"] = activate_button(clean)
+                initial_rows = read_rows(trace_window)
+                if safe(combo.window_text, "").strip() != target:
+                    if edits:
+                        edits[0].set_edit_text(target)
+                    else:
+                        combo.set_edit_text(target)
+            result["start_trace_action"] = activate_button(run_button)
         result["trace_started"] = True
         deadline = time.monotonic() + args.timeout
         started = time.monotonic()
@@ -343,7 +437,7 @@ def main():
         while time.monotonic() < deadline:
             caption = normalize(safe(run_button.window_text, ""))
             enabled = safe(run_button.is_enabled, False)
-            is_busy = caption in {normalize(x) for x in ["Stop", "停止", "Stoping", "Stopping", "停止中"]}
+            is_busy = caption in busy_captions
             result["busy_observed"] = result["busy_observed"] or is_busy
             try:
                 rows = read_rows(trace_window)
@@ -393,8 +487,16 @@ def main():
         if desktop is not None and result["status"] in {"blocked", "fail"}:
             safe(lambda: evidence("failure", trace_window))
         if app is not None:
-            # Only terminate the application launched for this test.
+            # BestTrace uses another application process for the trace dialog.
+            # Refresh ownership before closing the original main application.
+            safe(windows)
             safe(lambda: app.kill(soft=False))
+            for pid in owned_pids - preexisting_pids:
+                # Recheck the path before termination in case a process exited
+                # and Windows reused its PID. Never close preexisting instances.
+                path = safe(lambda: process_image(pid))
+                if path and os.path.normcase(os.path.abspath(path)) == os.path.normcase(str(executable)):
+                    safe(lambda: Application(backend="win32").connect(process=pid).kill(soft=False))
         result["finished_at"] = dt.datetime.now(dt.timezone.utc).isoformat()
         (out / "result.json").write_text(json.dumps(result, ensure_ascii=False, indent=2), encoding="utf-8")
         print(json.dumps({"status": result["status"], "reason": result["reason"],

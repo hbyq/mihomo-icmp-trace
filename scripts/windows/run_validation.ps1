@@ -9,7 +9,8 @@ param(
     [ValidateRange(15, 120)][int]$BestTraceTimeout = 90,
     [switch]$SkipPacketCapture,
     [switch]$UseFixture,
-    [switch]$AllowIcmpErrors
+    [switch]$AllowIcmpErrors,
+    [switch]$ScopeIcmpErrorsToInterface
 )
 
 Set-StrictMode -Version Latest
@@ -60,6 +61,53 @@ function Save-NetworkState([string]$Directory, [string]$Stem) {
         routes = @(Get-NetRoute -AddressFamily IPv4 -ErrorAction SilentlyContinue | Select-Object DestinationPrefix, NextHop, InterfaceIndex, InterfaceAlias, RouteMetric)
     }
     Write-Json $state (Join-Path $Directory ($Stem + '.json'))
+}
+
+function Save-IpStatistics([string]$Directory, [string]$Stem) {
+    $result = [ordered]@{ status = 'unavailable'; received_unknown_protocol = $null; counters = $null; error = $null }
+    try {
+        $process = Start-CapturedProcess 'netsh.exe' @('interface', 'ipv4', 'show', 'ipstats') $Directory $Stem
+        $result.netsh_process = Wait-CapturedProcess $process 5
+        $statistics = [System.Net.NetworkInformation.IPGlobalProperties]::GetIPGlobalProperties().GetIPv4GlobalStatistics()
+        $result.counters = [ordered]@{
+            received_packets = $statistics.ReceivedPackets
+            received_unknown_protocol = $statistics.ReceivedPacketsWithUnknownProtocol
+            received_header_errors = $statistics.ReceivedPacketsWithHeadersErrors
+            received_address_errors = $statistics.ReceivedPacketsWithAddressErrors
+            received_discarded = $statistics.ReceivedPacketsDiscarded
+            delivered = $statistics.ReceivedPacketsDelivered
+            output_requests = $statistics.OutputPacketRequests
+        }
+        $result.received_unknown_protocol = $statistics.ReceivedPacketsWithUnknownProtocol
+        $result.status = 'recorded'
+    } catch { $result.error = $_.Exception.Message }
+    Write-Json $result (Join-Path $Directory ($Stem + '.json'))
+    return $result
+}
+
+function Save-IcmpFirewallRules([string]$Directory, [string]$Stem) {
+    $result = [ordered]@{ status = 'unavailable'; rules = @(); error = $null; path = (Join-Path $Directory ($Stem + '.json')) }
+    try {
+        $rows = [System.Collections.Generic.List[object]]::new()
+        foreach ($rule in Get-NetFirewallRule -Enabled True) {
+            $ports = @(Get-NetFirewallPortFilter -AssociatedNetFirewallRule $rule -ErrorAction SilentlyContinue)
+            foreach ($port in $ports) {
+                # Inspect protocol as well as the caption: BestTrace may call
+                # its broad ICMP rule "ipip", without ICMP in DisplayName.
+                if ([string]$port.Protocol -in @('1', '58', 'ICMPv4', 'ICMPv6') -or $rule.DisplayName -like '*ICMP*') {
+                    $rows.Add([ordered]@{
+                        name = [string]$rule.Name; display_name = [string]$rule.DisplayName
+                        enabled = [string]$rule.Enabled; direction = [string]$rule.Direction
+                        action = [string]$rule.Action; profile = [string]$rule.Profile
+                        protocol = [string]$port.Protocol; icmp_type = @($port.IcmpType)
+                    })
+                }
+            }
+        }
+        $result.rules = @($rows.ToArray()); $result.status = 'recorded'
+    } catch { $result.error = $_.Exception.Message }
+    Write-Json $result $result.path
+    return $result
 }
 
 function Get-PhysicalExit([string]$Target) {
@@ -205,7 +253,7 @@ function Start-PacketCapture([string]$Directory) {
     return $result
 }
 
-function Stop-PacketCapture($Capture, [string]$Directory, [string]$Target, $PhysicalExit) {
+function Stop-PacketCapture($Capture, [string]$Directory, [string]$Target, $PhysicalExit, [string[]]$TunAddresses) {
     if (-not $script:ActiveCapture) { return }
     try {
         & pktmon.exe stop 2>&1 | Out-File (Join-Path $Directory 'pktmon-stop.log')
@@ -218,8 +266,8 @@ function Stop-PacketCapture($Capture, [string]$Directory, [string]$Target, $Phys
         # quoted requests with actual low-TTL Echo packets from the egress IP.
         $parser = @'
 import json,struct,sys,ipaddress,hashlib
-path,target,physical_json,out=sys.argv[1:]
-physical=set(json.loads(physical_json)); data=open(path,'rb').read()
+path,target,physical_json,tun_json,out=sys.argv[1:]
+physical=set(json.loads(physical_json)); tun=set(json.loads(tun_json)); data=open(path,'rb').read()
 endian='<'; interfaces=[]; packets=[]; seen=set(); offset=0; unsupported=set(); errors=[]; raw_under_ethernet=0
 def looks_like_raw_ipv4(frame):
     if len(frame)<20 or frame[0]>>4!=4:return False
@@ -247,12 +295,14 @@ def ipv4(frame,link):
     if h<20 or len(frame)<h+8 or total<h+8:return None
     b=frame[h:min(total,len(frame))]
     r={'src':str(ipaddress.IPv4Address(frame[12:16])),'dst':str(ipaddress.IPv4Address(frame[16:20])),
-       'ttl':frame[8],'type':b[0],'code':b[1],'id':struct.unpack('!H',b[4:6])[0],'sequence':struct.unpack('!H',b[6:8])[0]}
+       'ttl':frame[8],'ip_id':struct.unpack('!H',frame[4:6])[0],'type':b[0],'code':b[1],
+       'checksum':b[2:4].hex(),'id':struct.unpack('!H',b[4:6])[0],'sequence':struct.unpack('!H',b[6:8])[0]}
     if b[0] in (3,11,12) and len(b)>=8+20+8:
         q=b[8:];qh=(q[0]&15)*4
         if q[0]>>4==4 and qh>=20 and len(q)>=qh+8 and q[9]==1:
             r['quote']={'src':str(ipaddress.IPv4Address(q[12:16])),'dst':str(ipaddress.IPv4Address(q[16:20])),
-              'ttl':q[8],'type':q[qh],'id':struct.unpack('!H',q[qh+4:qh+6])[0], 'sequence':struct.unpack('!H',q[qh+6:qh+8])[0]}
+              'ttl':q[8],'ip_id':struct.unpack('!H',q[4:6])[0],'type':q[qh],'checksum':q[qh+2:qh+4].hex(),
+              'id':struct.unpack('!H',q[qh+4:qh+6])[0], 'sequence':struct.unpack('!H',q[qh+6:qh+8])[0]}
     return r
 while offset+12<=len(data):
     if data[offset:offset+4]==b'\x0a\x0d\x0d\x0a':
@@ -273,18 +323,32 @@ echo=[p for p in packets if p['type']==8 and p['dst']==target and p['src'] in ph
 keys={(p['id'],p['sequence']) for p in echo if p['ttl']<=12}
 errors_from_routers=[p for p in packets if p['type']==11 and p['src']!=target and p['dst'] in physical
                     and p.get('quote',{}).get('dst')==target and (p['quote']['id'],p['quote']['sequence']) in keys]
-restored=[p for p in packets if p['type']==11 and p['src']!=target and p.get('quote',{}).get('dst')==target
-          and p['dst'] not in physical and p.get('quote',{}).get('src') not in physical]
+original=[p for p in packets if p['type']==8 and p['dst']==target and p['src'] in tun]
+original_by_key={(p['src'],p['id'],p['sequence'],p['checksum']):p for p in original}
+restored=[]
+for p in packets:
+    q=p.get('quote',{})
+    if p['type']!=11 or p['src']==target or p['dst'] not in tun or q.get('src')!=p['dst'] or q.get('dst')!=target or q.get('type')!=8:continue
+    key=(q['src'],q['id'],q['sequence'],q['checksum'])
+    if key not in original_by_key:continue
+    p['original_probe']={k:original_by_key[key][k] for k in ('src','dst','ttl','ip_id','id','sequence','checksum')}
+    p['correlation']='TUN source, destination, Echo identifier, sequence and original checksum match'
+    restored.append(p)
+restored_routers=sorted({p['src'] for p in restored})
 result={'status':'verified' if errors_from_routers else 'inconclusive',
   'icmp_packet_count':len(packets),'physical_echo_requests':echo,'physical_time_exceeded':errors_from_routers,
-  'possible_tun_restored_time_exceeded':restored,'router_addresses':sorted({p['src'] for p in errors_from_routers}),
+  'original_tun_echo_requests':original,'possible_tun_restored_time_exceeded':restored,
+  'restored_router_addresses':restored_routers,
+  'tun_error_correlation_status':'verified-two-routers' if {'192.0.2.1','192.0.2.2'}<=set(restored_routers) else 'inconclusive',
+  'router_addresses':sorted({p['src'] for p in errors_from_routers}),
   'observed_egress_ttls':sorted({p['ttl'] for p in echo}),
   'raw_ipv4_under_ethernet_linktype':raw_under_ethernet,'unsupported_linktypes':sorted(unsupported),'errors':errors}
 open(out,'w',encoding='utf-8').write(json.dumps(result,indent=2))
 '@
         $analysisPath = Join-Path $Directory 'packet-analysis.json'
         $addressesJson = ConvertTo-Json -InputObject @($PhysicalExit.addresses) -Compress
-        $arguments = @('-c', $parser, $pcap, $Target, $addressesJson, $analysisPath)
+        $tunJson = ConvertTo-Json -InputObject @($TunAddresses) -Compress
+        $arguments = @('-c', $parser, $pcap, $Target, $addressesJson, $tunJson, $analysisPath)
         $process = Start-CapturedProcess 'python' $arguments $Directory 'packet-analysis'
         $analysisRun = Wait-CapturedProcess $process 15
         if ($analysisRun.exit_code -ne 0 -or -not (Test-Path $analysisPath)) { throw 'Packet analyzer failed; inspect packet-analysis stderr' }
@@ -334,12 +398,18 @@ function Run-Scenario([string]$Name, [string]$Target, $PhysicalExit, [string]$St
         scenario = $Name; target = $Target; stack = $Stack; icmp_trace = $TraceEnabled
         status = 'blocked'; reason = $null; physical_exit = $PhysicalExit; tun_route_verified = $false
         icmp_handler_log_seen = $false; trace_setup_error = $false; runtime_failure = $false; tools = $null; capture = $null
-        directory = $directory; fixture_checks = $null; fixture_evidence = $null
+        directory = $directory; fixture_checks = $null; fixture_evidence = $null; tun_addresses = @()
+        ip_statistics = [ordered]@{ before = $null; after = $null; unknown_protocol_delta = $null }
+        icmp_firewall_changes = [ordered]@{ before_path = $null; after_path = $null; added_rules = @(); removed_rule_names = @() }
+        tun_restoration = [ordered]@{ required = [bool]($UseFixture -and $TraceEnabled); passed = $false; routers = @(); reason = $null }
         cleanup = [ordered]@{ graceful_tun_disable = $false; residual_target_routes = @(); error = $null }
     }
     $process = $null; $tunIndex = $null; $port = 19280 + $script:Results.Count
     $device = 'ICMPValidation-' + $Name + '-' + $PID
     Save-NetworkState $directory 'network-before'
+    $result.ip_statistics.before = Save-IpStatistics $directory 'ipv4-ipstats-before'
+    $firewallBefore = Save-IcmpFirewallRules $directory 'icmp-firewall-before'
+    $result.icmp_firewall_changes.before_path = $firewallBefore.path
     try {
         if ($Name -ne 'baseline') {
             $interfaceYaml = "'" + $PhysicalExit.name.Replace("'", "''") + "'"
@@ -402,6 +472,7 @@ rules:
                 Start-Sleep -Milliseconds 300
             } while ([DateTime]::UtcNow -lt $deadline)
             if (-not $result.tun_route_verified) { throw 'The target /32 did not become the selected Wintun route; refusing bypassed tests' }
+            $result.tun_addresses = @(Get-NetIPAddress -InterfaceIndex $tunIndex -AddressFamily IPv4 | ForEach-Object { $_.IPAddress })
             try {
                 $active = Invoke-RestMethod -Uri "http://127.0.0.1:$port/configs" -TimeoutSec 3
                 Write-Json $active (Join-Path $directory 'active-config.json')
@@ -441,7 +512,27 @@ rules:
         $result.reason = $_.Exception.Message
         if ($null -ne $process -and $process.HasExited) { $result.status = 'fail'; $result.runtime_failure = $true }
     } finally {
-        if ($null -ne $result.capture) { Stop-PacketCapture $result.capture $directory $Target $PhysicalExit }
+        if ($null -ne $result.capture) { Stop-PacketCapture $result.capture $directory $Target $PhysicalExit $result.tun_addresses }
+        if ($result.tun_restoration.required) {
+            $analysis = if ($null -ne $result.capture) { $result.capture.analysis } else { $null }
+            if ($null -ne $analysis) {
+                $result.tun_restoration.routers = @($analysis.restored_router_addresses)
+                $result.tun_restoration.passed = $analysis.tun_error_correlation_status -eq 'verified-two-routers'
+            }
+            if ($result.tun_restoration.passed) {
+                $result.tun_restoration.reason = 'Time Exceeded from both fixture routers matches captured original Wintun probes by source, identifier, sequence and checksum'
+            } else {
+                $result.tun_restoration.reason = 'Independent capture does not show correlated Time Exceeded backwrites through Wintun from both fixture routers'
+                if ($result.status -eq 'pass') {
+                    if ($null -ne $analysis -and @($analysis.original_tun_echo_requests).Count -gt 0) {
+                        $result.status = 'fail'
+                        $result.reason = 'Tool results look successful, but actual captured TUN probes have no correlated error backwrites from both fixture routers'
+                    } else {
+                        $result.status = 'inconclusive'; $result.reason = $result.tun_restoration.reason
+                    }
+                }
+            }
+        }
         if ($UseFixture -and $null -ne $script:FixtureDirectory) {
             $result.fixture_evidence = Read-FixtureEvidence $scenarioStartedAt
             $eventsPath = Join-Path $directory 'fixture-events.json'
@@ -469,6 +560,18 @@ rules:
             $result.cleanup.residual_target_routes = @(Get-NetRoute -DestinationPrefix ($Target + '/32') -InterfaceIndex $tunIndex -ErrorAction SilentlyContinue | Select-Object InterfaceIndex, DestinationPrefix)
         }
         Save-NetworkState $directory 'network-after'
+        $firewallAfter = Save-IcmpFirewallRules $directory 'icmp-firewall-after'
+        $result.icmp_firewall_changes.after_path = $firewallAfter.path
+        if ($firewallBefore.status -eq 'recorded' -and $firewallAfter.status -eq 'recorded') {
+            $beforeNames = @($firewallBefore.rules | ForEach-Object { $_.name })
+            $afterNames = @($firewallAfter.rules | ForEach-Object { $_.name })
+            $result.icmp_firewall_changes.added_rules = @($firewallAfter.rules | Where-Object { $_.name -notin $beforeNames })
+            $result.icmp_firewall_changes.removed_rule_names = @($beforeNames | Where-Object { $_ -notin $afterNames })
+        }
+        $result.ip_statistics.after = Save-IpStatistics $directory 'ipv4-ipstats-after'
+        if ($result.ip_statistics.before.status -eq 'recorded' -and $result.ip_statistics.after.status -eq 'recorded') {
+            $result.ip_statistics.unknown_protocol_delta = $result.ip_statistics.after.received_unknown_protocol - $result.ip_statistics.before.received_unknown_protocol
+        }
         Write-Json $result (Join-Path $directory 'scenario-result.json')
         $script:Results.Add($result)
     }
@@ -481,6 +584,8 @@ $summary = [ordered]@{
     status = 'blocked'; reason = $null; mode = $(if ($UseFixture) { 'synthetic-icmp-fixture' } else { 'public-network' })
     started_at = $script:StartedAt.ToString('o'); ended_at = $null; scenarios = @(); fixture = $null
     allow_icmp_errors = [bool]$AllowIcmpErrors; firewall = $null
+    scope_icmp_errors_to_interface = [bool]$ScopeIcmpErrorsToInterface
+    requires_correlated_tun_errors_from_both_fixture_routers = [bool]$UseFixture
     limitations = @('Only IPv4 real-IP probes are exercised here; Fake-IP, IPv6, Verge service mode and Tailscale coexistence need separate validation.')
 }
 try {
@@ -493,6 +598,7 @@ try {
     $OutputDir = [System.IO.Path]::GetFullPath($OutputDir)
     [void](New-Item -ItemType Directory -Path $OutputDir -Force)
     if (-not (Test-Path $script:Helper)) { throw 'besttrace_gui.py is missing' }
+    if ($ScopeIcmpErrorsToInterface -and -not $AllowIcmpErrors) { throw '-ScopeIcmpErrorsToInterface requires -AllowIcmpErrors' }
     $summary.firewall = [ordered]@{
         profiles_before = @(Get-NetFirewallProfile | Select-Object Name, Enabled, DefaultInboundAction, DefaultOutboundAction)
         diagnostic_rule = $null; removed = $false; cleanup_error = $null
@@ -501,13 +607,25 @@ try {
     if ($AllowIcmpErrors) {
         if (-not $UseFixture) { throw '-AllowIcmpErrors is scoped to the controlled fixture addresses and requires -UseFixture' }
         $script:FirewallRuleName = 'MihomoICMPErrors-' + $PID + '-' + [Guid]::NewGuid().ToString('N')
-        $rule = New-NetFirewallRule -Name $script:FirewallRuleName -DisplayName $script:FirewallRuleName `
-            -Direction Inbound -Protocol ICMPv4 -IcmpType @('3', '11', '12') -Action Allow -Profile Any `
-            -RemoteAddress @('192.0.2.1', '192.0.2.2', '203.0.113.77')
+        $ruleArguments = @{
+            Name = $script:FirewallRuleName; DisplayName = $script:FirewallRuleName
+            Direction = 'Inbound'; Protocol = 'ICMPv4'; IcmpType = @('3', '11', '12')
+            Action = 'Allow'; Profile = 'Any'; RemoteAddress = @('192.0.2.1', '192.0.2.2', '203.0.113.77')
+        }
+        $firewallInterface = $null
+        if ($ScopeIcmpErrorsToInterface) {
+            # Resolve before creating a TUN adapter: this must be the physical
+            # DIRECT interface, never the subsequently preferred TUN /32.
+            $firewallExit = Get-PhysicalExit '203.0.113.77'
+            $firewallInterface = [string]$firewallExit.name
+            $ruleArguments.InterfaceAlias = $firewallInterface
+        }
+        $rule = New-NetFirewallRule @ruleArguments
         $summary.firewall.diagnostic_rule = [ordered]@{
             name = $script:FirewallRuleName; direction = 'Inbound'; protocol = 'ICMPv4'
             types = @('3', '11', '12'); remote_addresses = @('192.0.2.1', '192.0.2.2', '203.0.113.77')
             profile = 'Any'; action = 'Allow'; program = 'Any'; enabled = [string]$rule.Enabled
+            interface_alias = $firewallInterface
         }
         Write-Json $summary.firewall (Join-Path $OutputDir 'firewall-diagnostic.json')
     }
@@ -562,6 +680,11 @@ try {
         $summary.status = 'blocked'; $summary.reason = 'The real Windows BestTrace GUI or a required TUN scenario could not be exercised'
     } elseif ($baseline.status -ne 'pass') {
         $summary.status = 'inconclusive'; $summary.reason = 'BestTrace without TUN has no usable intermediate-hop baseline on this Windows network'
+    } elseif ($UseFixture -and @($required | Where-Object {
+        $_.status -eq 'inconclusive' -and $null -ne $_.tools -and $_.tools.besttrace.status -eq 'pass' -and
+        -not $_.tun_restoration.passed
+    }).Count -gt 0) {
+        $summary.status = 'inconclusive'; $summary.reason = 'The tools show the controlled path, but independent captured Wintun error-restoration evidence is unavailable'
     } elseif (@($required | Where-Object { $_.status -ne 'pass' }).Count -gt 0) {
         $summary.status = 'fail'; $summary.reason = 'BestTrace sees intermediate hops without TUN, but a patched TUN scenario does not'
     } else {
@@ -569,12 +692,13 @@ try {
         if ($UseFixture) {
             $fixtureGaps = @($required | Where-Object {
                 $null -eq $_.fixture_evidence -or $_.fixture_evidence.status -ne 'recorded' -or
-                1 -notin $_.fixture_evidence.physical_ttls -or 2 -notin $_.fixture_evidence.physical_ttls
+                1 -notin $_.fixture_evidence.physical_ttls -or 2 -notin $_.fixture_evidence.physical_ttls -or
+                -not $_.tun_restoration.passed
             })
             if ($fixtureGaps.Count -gt 0) {
-                $summary.status = 'inconclusive'; $summary.reason = 'Tools show the controlled path but the fixture lacks physical TTL1/2 request evidence'
+                $summary.status = 'inconclusive'; $summary.reason = 'Tools show the controlled path but physical TTL1/2 or correlated Wintun error-backwrite evidence is missing'
             } else {
-                $summary.status = 'pass'; $summary.reason = 'Actual Windows BestTrace, tracert and .NET Ping show the controlled R1/R2/target path in both patched TUN stacks, with selected routes, forwarding logs and physical-egress fixture events'
+                $summary.status = 'pass'; $summary.reason = 'Actual Windows tools show R1/R2/target in both patched TUN stacks; captured error backwrites from both routers match the original Wintun probes, alongside physical-egress fixture evidence'
             }
         } elseif ($packetGaps.Count -gt 0) {
             $summary.status = 'inconclusive'; $summary.reason = 'BestTrace shows intermediate hops through both patched TUN stacks, but independent on-wire Time Exceeded evidence is unavailable'
