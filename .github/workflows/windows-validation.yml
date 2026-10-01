@@ -9,7 +9,7 @@ permissions:
   contents: read
 
 concurrency:
-  group: windows-icmp-validation-${{ github.ref }}
+  group: windows-icmp-validation-v2-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
@@ -91,7 +91,7 @@ jobs:
 
   runtime:
     needs: build
-    if: ${{ always() && needs.build.outputs.kernel_built == 'true' }}
+    if: ${{ !cancelled() && needs.build.outputs.kernel_built == 'true' }}
     runs-on: windows-2022
     # Default-firewall behavior is diagnostic; both explicit-rule variants
     # remain required and must satisfy full GUI/API/TUN-packet validation.
