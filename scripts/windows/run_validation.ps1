@@ -401,6 +401,9 @@ function Run-Tools([string]$Target, [string]$Directory) {
     $ping = Start-CapturedProcess 'ping.exe' @('-4', '-n', '2', '-w', '1000', $Target) $Directory 'ping'
     $guiDirectory = Join-Path $Directory 'besttrace'
     [void](New-Item -ItemType Directory -Path $guiDirectory -Force)
+    # A reused output directory must not turn a failed current launch into
+    # a pass by reading a result left by an earlier helper invocation.
+    Remove-Item -LiteralPath (Join-Path $guiDirectory 'result.json') -Force -ErrorAction SilentlyContinue
     $gui = $null
     $guiFailure = $null
     try {

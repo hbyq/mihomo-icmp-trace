@@ -1,0 +1,3124 @@
+{
+  "status": "inconclusive",
+  "public_path_verified": false,
+  "workflow_run_id": 36954184208,
+  "workflow_url": "https://github.com/hbyq/mihomo-icmp-trace/actions/runs/36954184208",
+  "workflow_head": "dbe42ef3f82826ee20d6c9a60bbb3196b0352084",
+  "workflow_job_conclusion": "success means evidence collection completed; all comparisons remained inconclusive",
+  "synthetic_packets": false,
+  "actual_gui_count": 24,
+  "outgoing_echo_total": 4896,
+  "incoming_echo_total": 0,
+  "incoming_error_total": 0,
+  "cases": [
+    {
+      "status": "inconclusive",
+      "reason": "BestTrace without TUN has no usable intermediate-hop baseline on this Windows network",
+      "target": "1.1.1.1",
+      "tested_kernel_run_id": "36913225840",
+      "actual_kernel_sha256": "6b01bb11de95bd51c10b7decb6a0c2a2ebe9f8d7147371a035b149bcc2d37383",
+      "environment": {
+        "recorded_at": "2026-10-02T02:08:18.3396128Z",
+        "runner_name": "GitHub Actions 1000001269",
+        "runner_os": "Windows",
+        "runner_arch": "X64",
+        "image_os": "win22",
+        "image_version": "20260927.320.1",
+        "requested_runner_image": "windows-2022",
+        "os_version": "10.0.20348.0",
+        "powershell_version": "7.6.6",
+        "repository_commit": "dbe42ef3f82826ee20d6c9a60bbb3196b0352084",
+        "workflow_run_id": "36954184208",
+        "os": {
+          "Caption": "Microsoft Windows Server 2022 Datacenter",
+          "Version": "10.0.20348",
+          "BuildNumber": "20348",
+          "OSArchitecture": "64-bit"
+        },
+        "nat": {
+          "status": "recorded",
+          "entries": [],
+          "error": null
+        },
+        "public_identity": {
+          "status": "observed",
+          "address": "64.236.161.18",
+          "endpoint": "https://api.ipify.org",
+          "error": null
+        },
+        "firewall_profiles": [
+          {
+            "Name": "Domain",
+            "Enabled": 1,
+            "DefaultInboundAction": 0,
+            "DefaultOutboundAction": 0
+          },
+          {
+            "Name": "Private",
+            "Enabled": 1,
+            "DefaultInboundAction": 0,
+            "DefaultOutboundAction": 0
+          },
+          {
+            "Name": "Public",
+            "Enabled": 1,
+            "DefaultInboundAction": 0,
+            "DefaultOutboundAction": 0
+          }
+        ],
+        "limitations": [
+          "Get-NetNat reports guest-configured NAT only; an empty result cannot exclude provider-side NAT.",
+          "HTTPS public identity is a best-effort egress observation; it cannot identify which network device filters ICMP."
+        ]
+      },
+      "physical_exit": {
+        "name": "Ethernet 3",
+        "index": 14,
+        "description": "Microsoft Hyper-V Network Adapter #3",
+        "addresses": [
+          "10.1.0.166"
+        ]
+      },
+      "preflight_default": {
+        "target": "1.1.1.1",
+        "firewall_condition": "default firewall before diagnostic rule",
+        "observations": [
+          {
+            "attempt": 1,
+            "ttl": 128,
+            "status": "TimedOut",
+            "address": "1.1.1.1",
+            "roundtrip_ms": 0,
+            "error": null
+          },
+          {
+            "attempt": 2,
+            "ttl": 128,
+            "status": "TimedOut",
+            "address": "1.1.1.1",
+            "roundtrip_ms": 0,
+            "error": null
+          }
+        ]
+      },
+      "preflight_allowed": {
+        "target": "1.1.1.1",
+        "firewall_condition": "physical-interface ICMP allow active",
+        "observations": [
+          {
+            "attempt": 1,
+            "ttl": 128,
+            "status": "TimedOut",
+            "address": "1.1.1.1",
+            "roundtrip_ms": 0,
+            "error": null
+          },
+          {
+            "attempt": 2,
+            "ttl": 128,
+            "status": "TimedOut",
+            "address": "1.1.1.1",
+            "roundtrip_ms": 0,
+            "error": null
+          }
+        ]
+      },
+      "tcp_controls": {
+        "observations": [
+          {
+            "target": "1.1.1.1",
+            "port": 443,
+            "connected": true,
+            "elapsed_ms": 10,
+            "local_endpoint": "10.1.0.166:55990",
+            "error": null
+          },
+          {
+            "target": "1.1.1.1",
+            "port": 53,
+            "connected": true,
+            "elapsed_ms": 3,
+            "local_endpoint": "10.1.0.166:55991",
+            "error": null
+          }
+        ],
+        "interpretation": "TCP reachability is an independent connectivity control; it does not prove that ICMP Echo or Time Exceeded is permitted."
+      },
+      "firewall": {
+        "condition": "physical-interface temporary inbound ICMPv4 allow",
+        "rule": {
+          "name": "MihomoPublicICMP-6140-7f0ec508b751439e964dceeb82d929e5",
+          "direction": "Inbound",
+          "action": "Allow",
+          "profile": "Any",
+          "protocol": "ICMPv4",
+          "types": [
+            "0",
+            "3",
+            "11",
+            "12"
+          ],
+          "program": "Any",
+          "remote_address": "Any",
+          "interface_alias": "Ethernet 3",
+          "interface_index": 14
+        },
+        "added": true,
+        "removed": true,
+        "cleanup_error": null,
+        "default_policies_changed": false
+      },
+      "scenarios": [
+        {
+          "scenario": "baseline",
+          "status": "inconclusive",
+          "reason": "BestTrace completed without a responding target",
+          "tun_route_verified": false,
+          "icmp_handler_log_seen": false,
+          "trace_setup_error": false,
+          "runtime_failure": false,
+          "cleanup": {
+            "graceful_tun_disable": false,
+            "residual_target_routes": [],
+            "error": null
+          },
+          "gui": {
+            "trace_started": true,
+            "trace_completed": true,
+            "probe_mode": "ICMP",
+            "max_hops_requested": 32,
+            "max_hops_actual": 32,
+            "max_hops_verified": true,
+            "hops": [],
+            "intermediate_hops": [],
+            "row_count": 32,
+            "rows_file": "evidence/windows/public-comparison/windows-2022/1_1_1_1/off-rows.tsv",
+            "rows_sha256": "4f465b93ddc43222e339fd2a5118fbf37b75e82a8214ec53e9be870ad212a39e"
+          },
+          "screenshot": "evidence/windows/public-comparison/windows-2022/1_1_1_1/off.png",
+          "screenshot_sha256": "63470ba165dd8261fbbc46df2c2f7fa4a322a5fd021ac1ce794e47f85c360109",
+          "pcapng_sha256": "3fe43d6b7524422592047fea01c88badd60c531db9c979a07cc4a20f1197195c",
+          "independent_capture": {
+            "outgoing_echo_count": 204,
+            "outgoing_ttls": [
+              1,
+              2,
+              3,
+              4,
+              5,
+              6,
+              7,
+              8,
+              9,
+              10,
+              11,
+              12,
+              13,
+              14,
+              15,
+              16,
+              17,
+              18,
+              19,
+              20,
+              21,
+              22,
+              23,
+              24,
+              25,
+              26,
+              27,
+              28,
+              29,
+              30,
+              31,
+              32,
+              64,
+              128
+            ],
+            "incoming_echo_reply_from_target_count": 0,
+            "incoming_icmp_error_count": 0,
+            "incoming_router_addresses": [],
+            "restored_to_tun_count": 0,
+            "original_tun_echo_count": 0,
+            "translated_identifier_count": 0,
+            "parse_notes": []
+          }
+        },
+        {
+          "scenario": "trace-mixed",
+          "status": "inconclusive",
+          "reason": "BestTrace completed without a responding target",
+          "tun_route_verified": true,
+          "icmp_handler_log_seen": true,
+          "trace_setup_error": false,
+          "runtime_failure": false,
+          "cleanup": {
+            "graceful_tun_disable": true,
+            "residual_target_routes": [],
+            "error": null
+          },
+          "gui": {
+            "trace_started": true,
+            "trace_completed": true,
+            "probe_mode": "ICMP",
+            "max_hops_requested": 32,
+            "max_hops_actual": 32,
+            "max_hops_verified": true,
+            "hops": [],
+            "intermediate_hops": [],
+            "row_count": 32,
+            "rows_file": "evidence/windows/public-comparison/windows-2022/1_1_1_1/mixed-rows.tsv",
+            "rows_sha256": "4f465b93ddc43222e339fd2a5118fbf37b75e82a8214ec53e9be870ad212a39e"
+          },
+          "screenshot": "evidence/windows/public-comparison/windows-2022/1_1_1_1/mixed.png",
+          "screenshot_sha256": "05dc405ec6a0047a193ddaff3106e56ee1342cda6cbe08018ea937d54576a20b",
+          "pcapng_sha256": "0c6986e8bccb985958b71ce4db1ac22a6ede03f2bc62b1b7d26968f6908572e5",
+          "independent_capture": {
+            "outgoing_echo_count": 204,
+            "outgoing_ttls": [
+              1,
+              2,
+              3,
+              4,
+              5,
+              6,
+              7,
+              8,
+              9,
+              10,
+              11,
+              12,
+              13,
+              14,
+              15,
+              16,
+              17,
+              18,
+              19,
+              20,
+              21,
+              22,
+              23,
+              24,
+              25,
+              26,
+              27,
+              28,
+              29,
+              30,
+              31,
+              32,
+              64,
+              128
+            ],
+            "incoming_echo_reply_from_target_count": 0,
+            "incoming_icmp_error_count": 0,
+            "incoming_router_addresses": [],
+            "restored_to_tun_count": 0,
+            "original_tun_echo_count": 204,
+            "translated_identifier_count": 203,
+            "parse_notes": []
+          }
+        },
+        {
+          "scenario": "trace-gvisor",
+          "status": "inconclusive",
+          "reason": "BestTrace completed without a responding target",
+          "tun_route_verified": true,
+          "icmp_handler_log_seen": true,
+          "trace_setup_error": false,
+          "runtime_failure": false,
+          "cleanup": {
+            "graceful_tun_disable": true,
+            "residual_target_routes": [],
+            "error": null
+          },
+          "gui": {
+            "trace_started": true,
+            "trace_completed": true,
+            "probe_mode": "ICMP",
+            "max_hops_requested": 32,
+            "max_hops_actual": 32,
+            "max_hops_verified": true,
+            "hops": [],
+            "intermediate_hops": [],
+            "row_count": 32,
+            "rows_file": "evidence/windows/public-comparison/windows-2022/1_1_1_1/gvisor-rows.tsv",
+            "rows_sha256": "4f465b93ddc43222e339fd2a5118fbf37b75e82a8214ec53e9be870ad212a39e"
+          },
+          "screenshot": "evidence/windows/public-comparison/windows-2022/1_1_1_1/gvisor.png",
+          "screenshot_sha256": "05dc405ec6a0047a193ddaff3106e56ee1342cda6cbe08018ea937d54576a20b",
+          "pcapng_sha256": "f4b192a0b8b578d76812c37a8975db2ba6322b02c04cd4c03febfe7d4005dc64",
+          "independent_capture": {
+            "outgoing_echo_count": 204,
+            "outgoing_ttls": [
+              1,
+              2,
+              3,
+              4,
+              5,
+              6,
+              7,
+              8,
+              9,
+              10,
+              11,
+              12,
+              13,
+              14,
+              15,
+              16,
+              17,
+              18,
+              19,
+              20,
+              21,
+              22,
+              23,
+              24,
+              25,
+              26,
+              27,
+              28,
+              29,
+              30,
+              31,
+              32,
+              64,
+              128
+            ],
+            "incoming_echo_reply_from_target_count": 0,
+            "incoming_icmp_error_count": 0,
+            "incoming_router_addresses": [],
+            "restored_to_tun_count": 0,
+            "original_tun_echo_count": 204,
+            "translated_identifier_count": 203,
+            "parse_notes": []
+          }
+        }
+      ]
+    },
+    {
+      "status": "inconclusive",
+      "reason": "BestTrace without TUN has no usable intermediate-hop baseline on this Windows network",
+      "target": "223.5.5.5",
+      "tested_kernel_run_id": "36913225840",
+      "actual_kernel_sha256": "6b01bb11de95bd51c10b7decb6a0c2a2ebe9f8d7147371a035b149bcc2d37383",
+      "environment": {
+        "recorded_at": "2026-10-02T02:08:20.2027840Z",
+        "runner_name": "GitHub Actions 1000001267",
+        "runner_os": "Windows",
+        "runner_arch": "X64",
+        "image_os": "win22",
+        "image_version": "20260927.320.1",
+        "requested_runner_image": "windows-2022",
+        "os_version": "10.0.20348.0",
+        "powershell_version": "7.6.6",
+        "repository_commit": "dbe42ef3f82826ee20d6c9a60bbb3196b0352084",
+        "workflow_run_id": "36954184208",
+        "os": {
+          "Caption": "Microsoft Windows Server 2022 Datacenter",
+          "Version": "10.0.20348",
+          "BuildNumber": "20348",
+          "OSArchitecture": "64-bit"
+        },
+        "nat": {
+          "status": "recorded",
+          "entries": [],
+          "error": null
+        },
+        "public_identity": {
+          "status": "observed",
+          "address": "20.163.6.176",
+          "endpoint": "https://api.ipify.org",
+          "error": null
+        },
+        "firewall_profiles": [
+          {
+            "Name": "Domain",
+            "Enabled": 1,
+            "DefaultInboundAction": 0,
+            "DefaultOutboundAction": 0
+          },
+          {
+            "Name": "Private",
+            "Enabled": 1,
+            "DefaultInboundAction": 0,
+            "DefaultOutboundAction": 0
+          },
+          {
+            "Name": "Public",
+            "Enabled": 1,
+            "DefaultInboundAction": 0,
+            "DefaultOutboundAction": 0
+          }
+        ],
+        "limitations": [
+          "Get-NetNat reports guest-configured NAT only; an empty result cannot exclude provider-side NAT.",
+          "HTTPS public identity is a best-effort egress observation; it cannot identify which network device filters ICMP."
+        ]
+      },
+      "physical_exit": {
+        "name": "Ethernet 3",
+        "index": 14,
+        "description": "Microsoft Hyper-V Network Adapter #3",
+        "addresses": [
+          "10.1.0.111"
+        ]
+      },
+      "preflight_default": {
+        "target": "223.5.5.5",
+        "firewall_condition": "default firewall before diagnostic rule",
+        "observations": [
+          {
+            "attempt": 1,
+            "ttl": 128,
+            "status": "TimedOut",
+            "address": "223.5.5.5",
+            "roundtrip_ms": 0,
+            "error": null
+          },
+          {
+            "attempt": 2,
+            "ttl": 128,
+            "status": "TimedOut",
+            "address": "223.5.5.5",
+            "roundtrip_ms": 0,
+            "error": null
+          }
+        ]
+      },
+      "preflight_allowed": {
+        "target": "223.5.5.5",
+        "firewall_condition": "physical-interface ICMP allow active",
+        "observations": [
+          {
+            "attempt": 1,
+            "ttl": 128,
+            "status": "TimedOut",
+            "address": "223.5.5.5",
+            "roundtrip_ms": 0,
+            "error": null
+          },
+          {
+            "attempt": 2,
+            "ttl": 128,
+            "status": "TimedOut",
+            "address": "223.5.5.5",
+            "roundtrip_ms": 0,
+            "error": null
+          }
+        ]
+      },
+      "tcp_controls": {
+        "observations": [
+          {
+            "target": "223.5.5.5",
+            "port": 443,
+            "connected": true,
+            "elapsed_ms": 149,
+            "local_endpoint": "10.1.0.111:52522",
+            "error": null
+          },
+          {
+            "target": "223.5.5.5",
+            "port": 53,
+            "connected": true,
+            "elapsed_ms": 138,
+            "local_endpoint": "10.1.0.111:52523",
+            "error": null
+          }
+        ],
+        "interpretation": "TCP reachability is an independent connectivity control; it does not prove that ICMP Echo or Time Exceeded is permitted."
+      },
+      "firewall": {
+        "condition": "physical-interface temporary inbound ICMPv4 allow",
+        "rule": {
+          "name": "MihomoPublicICMP-7376-38ee9eadd7ed4613aa3761fff39d290f",
+          "direction": "Inbound",
+          "action": "Allow",
+          "profile": "Any",
+          "protocol": "ICMPv4",
+          "types": [
+            "0",
+            "3",
+            "11",
+            "12"
+          ],
+          "program": "Any",
+          "remote_address": "Any",
+          "interface_alias": "Ethernet 3",
+          "interface_index": 14
+        },
+        "added": true,
+        "removed": true,
+        "cleanup_error": null,
+        "default_policies_changed": false
+      },
+      "scenarios": [
+        {
+          "scenario": "baseline",
+          "status": "inconclusive",
+          "reason": "BestTrace completed without a responding target",
+          "tun_route_verified": false,
+          "icmp_handler_log_seen": false,
+          "trace_setup_error": false,
+          "runtime_failure": false,
+          "cleanup": {
+            "graceful_tun_disable": false,
+            "residual_target_routes": [],
+            "error": null
+          },
+          "gui": {
+            "trace_started": true,
+            "trace_completed": true,
+            "probe_mode": "ICMP",
+            "max_hops_requested": 32,
+            "max_hops_actual": 32,
+            "max_hops_verified": true,
+            "hops": [],
+            "intermediate_hops": [],
+            "row_count": 32,
+            "rows_file": "evidence/windows/public-comparison/windows-2022/223_5_5_5/off-rows.tsv",
+            "rows_sha256": "4f465b93ddc43222e339fd2a5118fbf37b75e82a8214ec53e9be870ad212a39e"
+          },
+          "screenshot": "evidence/windows/public-comparison/windows-2022/223_5_5_5/off.png",
+          "screenshot_sha256": "01434b2a1a5e0bbf19266f9db621d4c84237f13fca87dbed6c578c5b2e5e3f20",
+          "pcapng_sha256": "340abec71fbb5993bb9c98a9aa774c5f407218f557f04d90d48ccd27d04c9d03",
+          "independent_capture": {
+            "outgoing_echo_count": 204,
+            "outgoing_ttls": [
+              1,
+              2,
+              3,
+              4,
+              5,
+              6,
+              7,
+              8,
+              9,
+              10,
+              11,
+              12,
+              13,
+              14,
+              15,
+              16,
+              17,
+              18,
+              19,
+              20,
+              21,
+              22,
+              23,
+              24,
+              25,
+              26,
+              27,
+              28,
+              29,
+              30,
+              31,
+              32,
+              64,
+              128
+            ],
+            "incoming_echo_reply_from_target_count": 0,
+            "incoming_icmp_error_count": 0,
+            "incoming_router_addresses": [],
+            "restored_to_tun_count": 0,
+            "original_tun_echo_count": 0,
+            "translated_identifier_count": 0,
+            "parse_notes": []
+          }
+        },
+        {
+          "scenario": "trace-mixed",
+          "status": "inconclusive",
+          "reason": "BestTrace completed without a responding target",
+          "tun_route_verified": true,
+          "icmp_handler_log_seen": true,
+          "trace_setup_error": false,
+          "runtime_failure": false,
+          "cleanup": {
+            "graceful_tun_disable": true,
+            "residual_target_routes": [],
+            "error": null
+          },
+          "gui": {
+            "trace_started": true,
+            "trace_completed": true,
+            "probe_mode": "ICMP",
+            "max_hops_requested": 32,
+            "max_hops_actual": 32,
+            "max_hops_verified": true,
+            "hops": [],
+            "intermediate_hops": [],
+            "row_count": 32,
+            "rows_file": "evidence/windows/public-comparison/windows-2022/223_5_5_5/mixed-rows.tsv",
+            "rows_sha256": "4f465b93ddc43222e339fd2a5118fbf37b75e82a8214ec53e9be870ad212a39e"
+          },
+          "screenshot": "evidence/windows/public-comparison/windows-2022/223_5_5_5/mixed.png",
+          "screenshot_sha256": "01434b2a1a5e0bbf19266f9db621d4c84237f13fca87dbed6c578c5b2e5e3f20",
+          "pcapng_sha256": "e9b880c109d8fa9606a6aea2459719fd842012e480317f4eb0a7f0b3a2d0545e",
+          "independent_capture": {
+            "outgoing_echo_count": 204,
+            "outgoing_ttls": [
+              1,
+              2,
+              3,
+              4,
+              5,
+              6,
+              7,
+              8,
+              9,
+              10,
+              11,
+              12,
+              13,
+              14,
+              15,
+              16,
+              17,
+              18,
+              19,
+              20,
+              21,
+              22,
+              23,
+              24,
+              25,
+              26,
+              27,
+              28,
+              29,
+              30,
+              31,
+              32,
+              64,
+              128
+            ],
+            "incoming_echo_reply_from_target_count": 0,
+            "incoming_icmp_error_count": 0,
+            "incoming_router_addresses": [],
+            "restored_to_tun_count": 0,
+            "original_tun_echo_count": 204,
+            "translated_identifier_count": 203,
+            "parse_notes": []
+          }
+        },
+        {
+          "scenario": "trace-gvisor",
+          "status": "inconclusive",
+          "reason": "BestTrace completed without a responding target",
+          "tun_route_verified": true,
+          "icmp_handler_log_seen": true,
+          "trace_setup_error": false,
+          "runtime_failure": false,
+          "cleanup": {
+            "graceful_tun_disable": true,
+            "residual_target_routes": [],
+            "error": null
+          },
+          "gui": {
+            "trace_started": true,
+            "trace_completed": true,
+            "probe_mode": "ICMP",
+            "max_hops_requested": 32,
+            "max_hops_actual": 32,
+            "max_hops_verified": true,
+            "hops": [],
+            "intermediate_hops": [],
+            "row_count": 32,
+            "rows_file": "evidence/windows/public-comparison/windows-2022/223_5_5_5/gvisor-rows.tsv",
+            "rows_sha256": "4f465b93ddc43222e339fd2a5118fbf37b75e82a8214ec53e9be870ad212a39e"
+          },
+          "screenshot": "evidence/windows/public-comparison/windows-2022/223_5_5_5/gvisor.png",
+          "screenshot_sha256": "01434b2a1a5e0bbf19266f9db621d4c84237f13fca87dbed6c578c5b2e5e3f20",
+          "pcapng_sha256": "26e22438797c1ed3353719c8e6d316b0c634a650af8fdc66ebe9de4a1104e72c",
+          "independent_capture": {
+            "outgoing_echo_count": 204,
+            "outgoing_ttls": [
+              1,
+              2,
+              3,
+              4,
+              5,
+              6,
+              7,
+              8,
+              9,
+              10,
+              11,
+              12,
+              13,
+              14,
+              15,
+              16,
+              17,
+              18,
+              19,
+              20,
+              21,
+              22,
+              23,
+              24,
+              25,
+              26,
+              27,
+              28,
+              29,
+              30,
+              31,
+              32,
+              64,
+              128
+            ],
+            "incoming_echo_reply_from_target_count": 0,
+            "incoming_icmp_error_count": 0,
+            "incoming_router_addresses": [],
+            "restored_to_tun_count": 0,
+            "original_tun_echo_count": 204,
+            "translated_identifier_count": 203,
+            "parse_notes": []
+          }
+        }
+      ]
+    },
+    {
+      "status": "inconclusive",
+      "reason": "BestTrace without TUN has no usable intermediate-hop baseline on this Windows network",
+      "target": "8.8.8.8",
+      "tested_kernel_run_id": "36913225840",
+      "actual_kernel_sha256": "6b01bb11de95bd51c10b7decb6a0c2a2ebe9f8d7147371a035b149bcc2d37383",
+      "environment": {
+        "recorded_at": "2026-10-02T02:08:27.9046669Z",
+        "runner_name": "GitHub Actions 1000001262",
+        "runner_os": "Windows",
+        "runner_arch": "X64",
+        "image_os": "win22",
+        "image_version": "20260927.320.1",
+        "requested_runner_image": "windows-2022",
+        "os_version": "10.0.20348.0",
+        "powershell_version": "7.6.6",
+        "repository_commit": "dbe42ef3f82826ee20d6c9a60bbb3196b0352084",
+        "workflow_run_id": "36954184208",
+        "os": {
+          "Caption": "Microsoft Windows Server 2022 Datacenter",
+          "Version": "10.0.20348",
+          "BuildNumber": "20348",
+          "OSArchitecture": "64-bit"
+        },
+        "nat": {
+          "status": "recorded",
+          "entries": [],
+          "error": null
+        },
+        "public_identity": {
+          "status": "observed",
+          "address": "13.64.25.176",
+          "endpoint": "https://api.ipify.org",
+          "error": null
+        },
+        "firewall_profiles": [
+          {
+            "Name": "Domain",
+            "Enabled": 1,
+            "DefaultInboundAction": 0,
+            "DefaultOutboundAction": 0
+          },
+          {
+            "Name": "Private",
+            "Enabled": 1,
+            "DefaultInboundAction": 0,
+            "DefaultOutboundAction": 0
+          },
+          {
+            "Name": "Public",
+            "Enabled": 1,
+            "DefaultInboundAction": 0,
+            "DefaultOutboundAction": 0
+          }
+        ],
+        "limitations": [
+          "Get-NetNat reports guest-configured NAT only; an empty result cannot exclude provider-side NAT.",
+          "HTTPS public identity is a best-effort egress observation; it cannot identify which network device filters ICMP."
+        ]
+      },
+      "physical_exit": {
+        "name": "Ethernet 3",
+        "index": 14,
+        "description": "Microsoft Hyper-V Network Adapter #3",
+        "addresses": [
+          "10.1.0.100"
+        ]
+      },
+      "preflight_default": {
+        "target": "8.8.8.8",
+        "firewall_condition": "default firewall before diagnostic rule",
+        "observations": [
+          {
+            "attempt": 1,
+            "ttl": 128,
+            "status": "TimedOut",
+            "address": "8.8.8.8",
+            "roundtrip_ms": 0,
+            "error": null
+          },
+          {
+            "attempt": 2,
+            "ttl": 128,
+            "status": "TimedOut",
+            "address": "8.8.8.8",
+            "roundtrip_ms": 0,
+            "error": null
+          }
+        ]
+      },
+      "preflight_allowed": {
+        "target": "8.8.8.8",
+        "firewall_condition": "physical-interface ICMP allow active",
+        "observations": [
+          {
+            "attempt": 1,
+            "ttl": 128,
+            "status": "TimedOut",
+            "address": "8.8.8.8",
+            "roundtrip_ms": 0,
+            "error": null
+          },
+          {
+            "attempt": 2,
+            "ttl": 128,
+            "status": "TimedOut",
+            "address": "8.8.8.8",
+            "roundtrip_ms": 0,
+            "error": null
+          }
+        ]
+      },
+      "tcp_controls": {
+        "observations": [
+          {
+            "target": "8.8.8.8",
+            "port": 443,
+            "connected": true,
+            "elapsed_ms": 22,
+            "local_endpoint": "10.1.0.100:51961",
+            "error": null
+          },
+          {
+            "target": "8.8.8.8",
+            "port": 53,
+            "connected": true,
+            "elapsed_ms": 2,
+            "local_endpoint": "10.1.0.100:51962",
+            "error": null
+          }
+        ],
+        "interpretation": "TCP reachability is an independent connectivity control; it does not prove that ICMP Echo or Time Exceeded is permitted."
+      },
+      "firewall": {
+        "condition": "physical-interface temporary inbound ICMPv4 allow",
+        "rule": {
+          "name": "MihomoPublicICMP-6108-976903dcbeec4cb19b7243757b3642f1",
+          "direction": "Inbound",
+          "action": "Allow",
+          "profile": "Any",
+          "protocol": "ICMPv4",
+          "types": [
+            "0",
+            "3",
+            "11",
+            "12"
+          ],
+          "program": "Any",
+          "remote_address": "Any",
+          "interface_alias": "Ethernet 3",
+          "interface_index": 14
+        },
+        "added": true,
+        "removed": true,
+        "cleanup_error": null,
+        "default_policies_changed": false
+      },
+      "scenarios": [
+        {
+          "scenario": "baseline",
+          "status": "inconclusive",
+          "reason": "BestTrace completed without a responding target",
+          "tun_route_verified": false,
+          "icmp_handler_log_seen": false,
+          "trace_setup_error": false,
+          "runtime_failure": false,
+          "cleanup": {
+            "graceful_tun_disable": false,
+            "residual_target_routes": [],
+            "error": null
+          },
+          "gui": {
+            "trace_started": true,
+            "trace_completed": true,
+            "probe_mode": "ICMP",
+            "max_hops_requested": 32,
+            "max_hops_actual": 32,
+            "max_hops_verified": true,
+            "hops": [],
+            "intermediate_hops": [],
+            "row_count": 32,
+            "rows_file": "evidence/windows/public-comparison/windows-2022/8_8_8_8/off-rows.tsv",
+            "rows_sha256": "4f465b93ddc43222e339fd2a5118fbf37b75e82a8214ec53e9be870ad212a39e"
+          },
+          "screenshot": "evidence/windows/public-comparison/windows-2022/8_8_8_8/off.png",
+          "screenshot_sha256": "123f23b3ac803b35f012a454da2059aad17d6f758a0becc44638436a1355278b",
+          "pcapng_sha256": "f48c9a5ddde756a9fba7fbf483f00b65b52747ea6c183fe3501cbe47da82529d",
+          "independent_capture": {
+            "outgoing_echo_count": 204,
+            "outgoing_ttls": [
+              1,
+              2,
+              3,
+              4,
+              5,
+              6,
+              7,
+              8,
+              9,
+              10,
+              11,
+              12,
+              13,
+              14,
+              15,
+              16,
+              17,
+              18,
+              19,
+              20,
+              21,
+              22,
+              23,
+              24,
+              25,
+              26,
+              27,
+              28,
+              29,
+              30,
+              31,
+              32,
+              64,
+              128
+            ],
+            "incoming_echo_reply_from_target_count": 0,
+            "incoming_icmp_error_count": 0,
+            "incoming_router_addresses": [],
+            "restored_to_tun_count": 0,
+            "original_tun_echo_count": 0,
+            "translated_identifier_count": 0,
+            "parse_notes": []
+          }
+        },
+        {
+          "scenario": "trace-mixed",
+          "status": "inconclusive",
+          "reason": "BestTrace completed without a responding target",
+          "tun_route_verified": true,
+          "icmp_handler_log_seen": true,
+          "trace_setup_error": false,
+          "runtime_failure": false,
+          "cleanup": {
+            "graceful_tun_disable": true,
+            "residual_target_routes": [],
+            "error": null
+          },
+          "gui": {
+            "trace_started": true,
+            "trace_completed": true,
+            "probe_mode": "ICMP",
+            "max_hops_requested": 32,
+            "max_hops_actual": 32,
+            "max_hops_verified": true,
+            "hops": [],
+            "intermediate_hops": [],
+            "row_count": 32,
+            "rows_file": "evidence/windows/public-comparison/windows-2022/8_8_8_8/mixed-rows.tsv",
+            "rows_sha256": "4f465b93ddc43222e339fd2a5118fbf37b75e82a8214ec53e9be870ad212a39e"
+          },
+          "screenshot": "evidence/windows/public-comparison/windows-2022/8_8_8_8/mixed.png",
+          "screenshot_sha256": "123f23b3ac803b35f012a454da2059aad17d6f758a0becc44638436a1355278b",
+          "pcapng_sha256": "4afd58c4c944906260b47ab8671b9807a4b9eac5b6b5b9e224741ae102d9f680",
+          "independent_capture": {
+            "outgoing_echo_count": 204,
+            "outgoing_ttls": [
+              1,
+              2,
+              3,
+              4,
+              5,
+              6,
+              7,
+              8,
+              9,
+              10,
+              11,
+              12,
+              13,
+              14,
+              15,
+              16,
+              17,
+              18,
+              19,
+              20,
+              21,
+              22,
+              23,
+              24,
+              25,
+              26,
+              27,
+              28,
+              29,
+              30,
+              31,
+              32,
+              64,
+              128
+            ],
+            "incoming_echo_reply_from_target_count": 0,
+            "incoming_icmp_error_count": 0,
+            "incoming_router_addresses": [],
+            "restored_to_tun_count": 0,
+            "original_tun_echo_count": 204,
+            "translated_identifier_count": 203,
+            "parse_notes": []
+          }
+        },
+        {
+          "scenario": "trace-gvisor",
+          "status": "inconclusive",
+          "reason": "BestTrace completed without a responding target",
+          "tun_route_verified": true,
+          "icmp_handler_log_seen": true,
+          "trace_setup_error": false,
+          "runtime_failure": false,
+          "cleanup": {
+            "graceful_tun_disable": true,
+            "residual_target_routes": [],
+            "error": null
+          },
+          "gui": {
+            "trace_started": true,
+            "trace_completed": true,
+            "probe_mode": "ICMP",
+            "max_hops_requested": 32,
+            "max_hops_actual": 32,
+            "max_hops_verified": true,
+            "hops": [],
+            "intermediate_hops": [],
+            "row_count": 32,
+            "rows_file": "evidence/windows/public-comparison/windows-2022/8_8_8_8/gvisor-rows.tsv",
+            "rows_sha256": "4f465b93ddc43222e339fd2a5118fbf37b75e82a8214ec53e9be870ad212a39e"
+          },
+          "screenshot": "evidence/windows/public-comparison/windows-2022/8_8_8_8/gvisor.png",
+          "screenshot_sha256": "123f23b3ac803b35f012a454da2059aad17d6f758a0becc44638436a1355278b",
+          "pcapng_sha256": "e10d34b6e29ce0671379900c6924e7623f228c12c9aee7f5720e21b1319dfa5b",
+          "independent_capture": {
+            "outgoing_echo_count": 204,
+            "outgoing_ttls": [
+              1,
+              2,
+              3,
+              4,
+              5,
+              6,
+              7,
+              8,
+              9,
+              10,
+              11,
+              12,
+              13,
+              14,
+              15,
+              16,
+              17,
+              18,
+              19,
+              20,
+              21,
+              22,
+              23,
+              24,
+              25,
+              26,
+              27,
+              28,
+              29,
+              30,
+              31,
+              32,
+              64,
+              128
+            ],
+            "incoming_echo_reply_from_target_count": 0,
+            "incoming_icmp_error_count": 0,
+            "incoming_router_addresses": [],
+            "restored_to_tun_count": 0,
+            "original_tun_echo_count": 204,
+            "translated_identifier_count": 203,
+            "parse_notes": []
+          }
+        }
+      ]
+    },
+    {
+      "status": "inconclusive",
+      "reason": "BestTrace without TUN has no usable intermediate-hop baseline on this Windows network",
+      "target": "9.9.9.9",
+      "tested_kernel_run_id": "36913225840",
+      "actual_kernel_sha256": "6b01bb11de95bd51c10b7decb6a0c2a2ebe9f8d7147371a035b149bcc2d37383",
+      "environment": {
+        "recorded_at": "2026-10-02T02:08:18.2801411Z",
+        "runner_name": "GitHub Actions 1000001268",
+        "runner_os": "Windows",
+        "runner_arch": "X64",
+        "image_os": "win22",
+        "image_version": "20260927.320.1",
+        "requested_runner_image": "windows-2022",
+        "os_version": "10.0.20348.0",
+        "powershell_version": "7.6.6",
+        "repository_commit": "dbe42ef3f82826ee20d6c9a60bbb3196b0352084",
+        "workflow_run_id": "36954184208",
+        "os": {
+          "Caption": "Microsoft Windows Server 2022 Datacenter",
+          "Version": "10.0.20348",
+          "BuildNumber": "20348",
+          "OSArchitecture": "64-bit"
+        },
+        "nat": {
+          "status": "recorded",
+          "entries": [],
+          "error": null
+        },
+        "public_identity": {
+          "status": "observed",
+          "address": "145.132.102.224",
+          "endpoint": "https://api.ipify.org",
+          "error": null
+        },
+        "firewall_profiles": [
+          {
+            "Name": "Domain",
+            "Enabled": 1,
+            "DefaultInboundAction": 0,
+            "DefaultOutboundAction": 0
+          },
+          {
+            "Name": "Private",
+            "Enabled": 1,
+            "DefaultInboundAction": 0,
+            "DefaultOutboundAction": 0
+          },
+          {
+            "Name": "Public",
+            "Enabled": 1,
+            "DefaultInboundAction": 0,
+            "DefaultOutboundAction": 0
+          }
+        ],
+        "limitations": [
+          "Get-NetNat reports guest-configured NAT only; an empty result cannot exclude provider-side NAT.",
+          "HTTPS public identity is a best-effort egress observation; it cannot identify which network device filters ICMP."
+        ]
+      },
+      "physical_exit": {
+        "name": "Ethernet 3",
+        "index": 14,
+        "description": "Microsoft Hyper-V Network Adapter #3",
+        "addresses": [
+          "10.1.0.115"
+        ]
+      },
+      "preflight_default": {
+        "target": "9.9.9.9",
+        "firewall_condition": "default firewall before diagnostic rule",
+        "observations": [
+          {
+            "attempt": 1,
+            "ttl": 128,
+            "status": "TimedOut",
+            "address": "9.9.9.9",
+            "roundtrip_ms": 0,
+            "error": null
+          },
+          {
+            "attempt": 2,
+            "ttl": 128,
+            "status": "TimedOut",
+            "address": "9.9.9.9",
+            "roundtrip_ms": 0,
+            "error": null
+          }
+        ]
+      },
+      "preflight_allowed": {
+        "target": "9.9.9.9",
+        "firewall_condition": "physical-interface ICMP allow active",
+        "observations": [
+          {
+            "attempt": 1,
+            "ttl": 128,
+            "status": "TimedOut",
+            "address": "9.9.9.9",
+            "roundtrip_ms": 0,
+            "error": null
+          },
+          {
+            "attempt": 2,
+            "ttl": 128,
+            "status": "TimedOut",
+            "address": "9.9.9.9",
+            "roundtrip_ms": 0,
+            "error": null
+          }
+        ]
+      },
+      "tcp_controls": {
+        "observations": [
+          {
+            "target": "9.9.9.9",
+            "port": 443,
+            "connected": true,
+            "elapsed_ms": 13,
+            "local_endpoint": "10.1.0.115:51990",
+            "error": null
+          },
+          {
+            "target": "9.9.9.9",
+            "port": 53,
+            "connected": true,
+            "elapsed_ms": 5,
+            "local_endpoint": "10.1.0.115:51991",
+            "error": null
+          }
+        ],
+        "interpretation": "TCP reachability is an independent connectivity control; it does not prove that ICMP Echo or Time Exceeded is permitted."
+      },
+      "firewall": {
+        "condition": "physical-interface temporary inbound ICMPv4 allow",
+        "rule": {
+          "name": "MihomoPublicICMP-2040-66e6a3fe3dab4ce18e4c261e97cd4d7f",
+          "direction": "Inbound",
+          "action": "Allow",
+          "profile": "Any",
+          "protocol": "ICMPv4",
+          "types": [
+            "0",
+            "3",
+            "11",
+            "12"
+          ],
+          "program": "Any",
+          "remote_address": "Any",
+          "interface_alias": "Ethernet 3",
+          "interface_index": 14
+        },
+        "added": true,
+        "removed": true,
+        "cleanup_error": null,
+        "default_policies_changed": false
+      },
+      "scenarios": [
+        {
+          "scenario": "baseline",
+          "status": "inconclusive",
+          "reason": "BestTrace completed without a responding target",
+          "tun_route_verified": false,
+          "icmp_handler_log_seen": false,
+          "trace_setup_error": false,
+          "runtime_failure": false,
+          "cleanup": {
+            "graceful_tun_disable": false,
+            "residual_target_routes": [],
+            "error": null
+          },
+          "gui": {
+            "trace_started": true,
+            "trace_completed": true,
+            "probe_mode": "ICMP",
+            "max_hops_requested": 32,
+            "max_hops_actual": 32,
+            "max_hops_verified": true,
+            "hops": [],
+            "intermediate_hops": [],
+            "row_count": 32,
+            "rows_file": "evidence/windows/public-comparison/windows-2022/9_9_9_9/off-rows.tsv",
+            "rows_sha256": "4f465b93ddc43222e339fd2a5118fbf37b75e82a8214ec53e9be870ad212a39e"
+          },
+          "screenshot": "evidence/windows/public-comparison/windows-2022/9_9_9_9/off.png",
+          "screenshot_sha256": "f3bf52f9553aef47690dc7d267e8d0c50154d113a12459a03054e0b008783499",
+          "pcapng_sha256": "417a741dc9f86328bed16fb79ea4b57b0c69d013f3d2ee54c905753b8ee3cb1f",
+          "independent_capture": {
+            "outgoing_echo_count": 204,
+            "outgoing_ttls": [
+              1,
+              2,
+              3,
+              4,
+              5,
+              6,
+              7,
+              8,
+              9,
+              10,
+              11,
+              12,
+              13,
+              14,
+              15,
+              16,
+              17,
+              18,
+              19,
+              20,
+              21,
+              22,
+              23,
+              24,
+              25,
+              26,
+              27,
+              28,
+              29,
+              30,
+              31,
+              32,
+              64,
+              128
+            ],
+            "incoming_echo_reply_from_target_count": 0,
+            "incoming_icmp_error_count": 0,
+            "incoming_router_addresses": [],
+            "restored_to_tun_count": 0,
+            "original_tun_echo_count": 0,
+            "translated_identifier_count": 0,
+            "parse_notes": []
+          }
+        },
+        {
+          "scenario": "trace-mixed",
+          "status": "inconclusive",
+          "reason": "BestTrace completed without a responding target",
+          "tun_route_verified": true,
+          "icmp_handler_log_seen": true,
+          "trace_setup_error": false,
+          "runtime_failure": false,
+          "cleanup": {
+            "graceful_tun_disable": true,
+            "residual_target_routes": [],
+            "error": null
+          },
+          "gui": {
+            "trace_started": true,
+            "trace_completed": true,
+            "probe_mode": "ICMP",
+            "max_hops_requested": 32,
+            "max_hops_actual": 32,
+            "max_hops_verified": true,
+            "hops": [],
+            "intermediate_hops": [],
+            "row_count": 32,
+            "rows_file": "evidence/windows/public-comparison/windows-2022/9_9_9_9/mixed-rows.tsv",
+            "rows_sha256": "4f465b93ddc43222e339fd2a5118fbf37b75e82a8214ec53e9be870ad212a39e"
+          },
+          "screenshot": "evidence/windows/public-comparison/windows-2022/9_9_9_9/mixed.png",
+          "screenshot_sha256": "5c6d2a22432ee2b20f59801d6ee6f793a7a685232bd1b0ed58ddf70720b69717",
+          "pcapng_sha256": "7fa53c0b7e394b91ff0a8d129a407b034b2948560b36e3946b822b0ee94032e0",
+          "independent_capture": {
+            "outgoing_echo_count": 204,
+            "outgoing_ttls": [
+              1,
+              2,
+              3,
+              4,
+              5,
+              6,
+              7,
+              8,
+              9,
+              10,
+              11,
+              12,
+              13,
+              14,
+              15,
+              16,
+              17,
+              18,
+              19,
+              20,
+              21,
+              22,
+              23,
+              24,
+              25,
+              26,
+              27,
+              28,
+              29,
+              30,
+              31,
+              32,
+              64,
+              128
+            ],
+            "incoming_echo_reply_from_target_count": 0,
+            "incoming_icmp_error_count": 0,
+            "incoming_router_addresses": [],
+            "restored_to_tun_count": 0,
+            "original_tun_echo_count": 204,
+            "translated_identifier_count": 203,
+            "parse_notes": []
+          }
+        },
+        {
+          "scenario": "trace-gvisor",
+          "status": "inconclusive",
+          "reason": "BestTrace completed without a responding target",
+          "tun_route_verified": true,
+          "icmp_handler_log_seen": true,
+          "trace_setup_error": false,
+          "runtime_failure": false,
+          "cleanup": {
+            "graceful_tun_disable": true,
+            "residual_target_routes": [],
+            "error": null
+          },
+          "gui": {
+            "trace_started": true,
+            "trace_completed": true,
+            "probe_mode": "ICMP",
+            "max_hops_requested": 32,
+            "max_hops_actual": 32,
+            "max_hops_verified": true,
+            "hops": [],
+            "intermediate_hops": [],
+            "row_count": 32,
+            "rows_file": "evidence/windows/public-comparison/windows-2022/9_9_9_9/gvisor-rows.tsv",
+            "rows_sha256": "4f465b93ddc43222e339fd2a5118fbf37b75e82a8214ec53e9be870ad212a39e"
+          },
+          "screenshot": "evidence/windows/public-comparison/windows-2022/9_9_9_9/gvisor.png",
+          "screenshot_sha256": "f3bf52f9553aef47690dc7d267e8d0c50154d113a12459a03054e0b008783499",
+          "pcapng_sha256": "657ed0f868edc1270689e11d16d2e8794e5d4c2b21453a240a47f27b4c394523",
+          "independent_capture": {
+            "outgoing_echo_count": 204,
+            "outgoing_ttls": [
+              1,
+              2,
+              3,
+              4,
+              5,
+              6,
+              7,
+              8,
+              9,
+              10,
+              11,
+              12,
+              13,
+              14,
+              15,
+              16,
+              17,
+              18,
+              19,
+              20,
+              21,
+              22,
+              23,
+              24,
+              25,
+              26,
+              27,
+              28,
+              29,
+              30,
+              31,
+              32,
+              64,
+              128
+            ],
+            "incoming_echo_reply_from_target_count": 0,
+            "incoming_icmp_error_count": 0,
+            "incoming_router_addresses": [],
+            "restored_to_tun_count": 0,
+            "original_tun_echo_count": 204,
+            "translated_identifier_count": 203,
+            "parse_notes": []
+          }
+        }
+      ]
+    },
+    {
+      "status": "inconclusive",
+      "reason": "BestTrace without TUN has no usable intermediate-hop baseline on this Windows network",
+      "target": "1.1.1.1",
+      "tested_kernel_run_id": "36913225840",
+      "actual_kernel_sha256": "6b01bb11de95bd51c10b7decb6a0c2a2ebe9f8d7147371a035b149bcc2d37383",
+      "environment": {
+        "recorded_at": "2026-10-02T02:08:19.9455841Z",
+        "runner_name": "GitHub Actions 1000001264",
+        "runner_os": "Windows",
+        "runner_arch": "X64",
+        "image_os": "win25-vs2026",
+        "image_version": "20260925.250.1",
+        "requested_runner_image": "windows-2025",
+        "os_version": "10.0.26100.0",
+        "powershell_version": "7.6.6",
+        "repository_commit": "dbe42ef3f82826ee20d6c9a60bbb3196b0352084",
+        "workflow_run_id": "36954184208",
+        "os": {
+          "Caption": "Microsoft Windows Server 2025 Datacenter",
+          "Version": "10.0.26100",
+          "BuildNumber": "26100",
+          "OSArchitecture": "64-bit"
+        },
+        "nat": {
+          "status": "recorded",
+          "entries": [],
+          "error": null
+        },
+        "public_identity": {
+          "status": "observed",
+          "address": "20.168.100.98",
+          "endpoint": "https://api.ipify.org",
+          "error": null
+        },
+        "firewall_profiles": [
+          {
+            "Name": "Domain",
+            "Enabled": 1,
+            "DefaultInboundAction": 0,
+            "DefaultOutboundAction": 0
+          },
+          {
+            "Name": "Private",
+            "Enabled": 1,
+            "DefaultInboundAction": 0,
+            "DefaultOutboundAction": 0
+          },
+          {
+            "Name": "Public",
+            "Enabled": 1,
+            "DefaultInboundAction": 0,
+            "DefaultOutboundAction": 0
+          }
+        ],
+        "limitations": [
+          "Get-NetNat reports guest-configured NAT only; an empty result cannot exclude provider-side NAT.",
+          "HTTPS public identity is a best-effort egress observation; it cannot identify which network device filters ICMP."
+        ]
+      },
+      "physical_exit": {
+        "name": "Ethernet 3",
+        "index": 14,
+        "description": "Microsoft Hyper-V Network Adapter #3",
+        "addresses": [
+          "10.1.0.101"
+        ]
+      },
+      "preflight_default": {
+        "target": "1.1.1.1",
+        "firewall_condition": "default firewall before diagnostic rule",
+        "observations": [
+          {
+            "attempt": 1,
+            "ttl": 128,
+            "status": "TimedOut",
+            "address": "1.1.1.1",
+            "roundtrip_ms": 0,
+            "error": null
+          },
+          {
+            "attempt": 2,
+            "ttl": 128,
+            "status": "TimedOut",
+            "address": "1.1.1.1",
+            "roundtrip_ms": 0,
+            "error": null
+          }
+        ]
+      },
+      "preflight_allowed": {
+        "target": "1.1.1.1",
+        "firewall_condition": "physical-interface ICMP allow active",
+        "observations": [
+          {
+            "attempt": 1,
+            "ttl": 128,
+            "status": "TimedOut",
+            "address": "1.1.1.1",
+            "roundtrip_ms": 0,
+            "error": null
+          },
+          {
+            "attempt": 2,
+            "ttl": 128,
+            "status": "TimedOut",
+            "address": "1.1.1.1",
+            "roundtrip_ms": 0,
+            "error": null
+          }
+        ]
+      },
+      "tcp_controls": {
+        "observations": [
+          {
+            "target": "1.1.1.1",
+            "port": 443,
+            "connected": true,
+            "elapsed_ms": 18,
+            "local_endpoint": "10.1.0.101:64635",
+            "error": null
+          },
+          {
+            "target": "1.1.1.1",
+            "port": 53,
+            "connected": true,
+            "elapsed_ms": 17,
+            "local_endpoint": "10.1.0.101:64636",
+            "error": null
+          }
+        ],
+        "interpretation": "TCP reachability is an independent connectivity control; it does not prove that ICMP Echo or Time Exceeded is permitted."
+      },
+      "firewall": {
+        "condition": "physical-interface temporary inbound ICMPv4 allow",
+        "rule": {
+          "name": "MihomoPublicICMP-5720-3c4d2e493b07464b84533d1f804ae319",
+          "direction": "Inbound",
+          "action": "Allow",
+          "profile": "Any",
+          "protocol": "ICMPv4",
+          "types": [
+            "0",
+            "3",
+            "11",
+            "12"
+          ],
+          "program": "Any",
+          "remote_address": "Any",
+          "interface_alias": "Ethernet 3",
+          "interface_index": 14
+        },
+        "added": true,
+        "removed": true,
+        "cleanup_error": null,
+        "default_policies_changed": false
+      },
+      "scenarios": [
+        {
+          "scenario": "baseline",
+          "status": "inconclusive",
+          "reason": "BestTrace completed without a responding target",
+          "tun_route_verified": false,
+          "icmp_handler_log_seen": false,
+          "trace_setup_error": false,
+          "runtime_failure": false,
+          "cleanup": {
+            "graceful_tun_disable": false,
+            "residual_target_routes": [],
+            "error": null
+          },
+          "gui": {
+            "trace_started": true,
+            "trace_completed": true,
+            "probe_mode": "ICMP",
+            "max_hops_requested": 32,
+            "max_hops_actual": 32,
+            "max_hops_verified": true,
+            "hops": [],
+            "intermediate_hops": [],
+            "row_count": 32,
+            "rows_file": "evidence/windows/public-comparison/windows-2025/1_1_1_1/off-rows.tsv",
+            "rows_sha256": "4f465b93ddc43222e339fd2a5118fbf37b75e82a8214ec53e9be870ad212a39e"
+          },
+          "screenshot": "evidence/windows/public-comparison/windows-2025/1_1_1_1/off.png",
+          "screenshot_sha256": "1b029a8e95350f0b21bde7718214e725e40db3d93ad83a2191653d1b96282456",
+          "pcapng_sha256": "ac95c529257193a984db8c1d3cdc7ba30beffe0fdf058ad151a3b552e07d1396",
+          "independent_capture": {
+            "outgoing_echo_count": 204,
+            "outgoing_ttls": [
+              1,
+              2,
+              3,
+              4,
+              5,
+              6,
+              7,
+              8,
+              9,
+              10,
+              11,
+              12,
+              13,
+              14,
+              15,
+              16,
+              17,
+              18,
+              19,
+              20,
+              21,
+              22,
+              23,
+              24,
+              25,
+              26,
+              27,
+              28,
+              29,
+              30,
+              31,
+              32,
+              64,
+              128
+            ],
+            "incoming_echo_reply_from_target_count": 0,
+            "incoming_icmp_error_count": 0,
+            "incoming_router_addresses": [],
+            "restored_to_tun_count": 0,
+            "original_tun_echo_count": 0,
+            "translated_identifier_count": 0,
+            "parse_notes": []
+          }
+        },
+        {
+          "scenario": "trace-mixed",
+          "status": "inconclusive",
+          "reason": "BestTrace completed without a responding target",
+          "tun_route_verified": true,
+          "icmp_handler_log_seen": true,
+          "trace_setup_error": false,
+          "runtime_failure": false,
+          "cleanup": {
+            "graceful_tun_disable": true,
+            "residual_target_routes": [],
+            "error": null
+          },
+          "gui": {
+            "trace_started": true,
+            "trace_completed": true,
+            "probe_mode": "ICMP",
+            "max_hops_requested": 32,
+            "max_hops_actual": 32,
+            "max_hops_verified": true,
+            "hops": [],
+            "intermediate_hops": [],
+            "row_count": 32,
+            "rows_file": "evidence/windows/public-comparison/windows-2025/1_1_1_1/mixed-rows.tsv",
+            "rows_sha256": "4f465b93ddc43222e339fd2a5118fbf37b75e82a8214ec53e9be870ad212a39e"
+          },
+          "screenshot": "evidence/windows/public-comparison/windows-2025/1_1_1_1/mixed.png",
+          "screenshot_sha256": "1b029a8e95350f0b21bde7718214e725e40db3d93ad83a2191653d1b96282456",
+          "pcapng_sha256": "a89467f68693abeb85635fb7e648942585a4952ff21ea3a28ec267101c257466",
+          "independent_capture": {
+            "outgoing_echo_count": 204,
+            "outgoing_ttls": [
+              1,
+              2,
+              3,
+              4,
+              5,
+              6,
+              7,
+              8,
+              9,
+              10,
+              11,
+              12,
+              13,
+              14,
+              15,
+              16,
+              17,
+              18,
+              19,
+              20,
+              21,
+              22,
+              23,
+              24,
+              25,
+              26,
+              27,
+              28,
+              29,
+              30,
+              31,
+              32,
+              64,
+              128
+            ],
+            "incoming_echo_reply_from_target_count": 0,
+            "incoming_icmp_error_count": 0,
+            "incoming_router_addresses": [],
+            "restored_to_tun_count": 0,
+            "original_tun_echo_count": 204,
+            "translated_identifier_count": 203,
+            "parse_notes": []
+          }
+        },
+        {
+          "scenario": "trace-gvisor",
+          "status": "inconclusive",
+          "reason": "BestTrace completed without a responding target",
+          "tun_route_verified": true,
+          "icmp_handler_log_seen": true,
+          "trace_setup_error": false,
+          "runtime_failure": false,
+          "cleanup": {
+            "graceful_tun_disable": true,
+            "residual_target_routes": [],
+            "error": null
+          },
+          "gui": {
+            "trace_started": true,
+            "trace_completed": true,
+            "probe_mode": "ICMP",
+            "max_hops_requested": 32,
+            "max_hops_actual": 32,
+            "max_hops_verified": true,
+            "hops": [],
+            "intermediate_hops": [],
+            "row_count": 32,
+            "rows_file": "evidence/windows/public-comparison/windows-2025/1_1_1_1/gvisor-rows.tsv",
+            "rows_sha256": "4f465b93ddc43222e339fd2a5118fbf37b75e82a8214ec53e9be870ad212a39e"
+          },
+          "screenshot": "evidence/windows/public-comparison/windows-2025/1_1_1_1/gvisor.png",
+          "screenshot_sha256": "1b029a8e95350f0b21bde7718214e725e40db3d93ad83a2191653d1b96282456",
+          "pcapng_sha256": "0044471522ce4427ac74fb7e362a2a69848f127e55580d3fdf0af8de13327190",
+          "independent_capture": {
+            "outgoing_echo_count": 204,
+            "outgoing_ttls": [
+              1,
+              2,
+              3,
+              4,
+              5,
+              6,
+              7,
+              8,
+              9,
+              10,
+              11,
+              12,
+              13,
+              14,
+              15,
+              16,
+              17,
+              18,
+              19,
+              20,
+              21,
+              22,
+              23,
+              24,
+              25,
+              26,
+              27,
+              28,
+              29,
+              30,
+              31,
+              32,
+              64,
+              128
+            ],
+            "incoming_echo_reply_from_target_count": 0,
+            "incoming_icmp_error_count": 0,
+            "incoming_router_addresses": [],
+            "restored_to_tun_count": 0,
+            "original_tun_echo_count": 204,
+            "translated_identifier_count": 203,
+            "parse_notes": []
+          }
+        }
+      ]
+    },
+    {
+      "status": "inconclusive",
+      "reason": "BestTrace without TUN has no usable intermediate-hop baseline on this Windows network",
+      "target": "223.5.5.5",
+      "tested_kernel_run_id": "36913225840",
+      "actual_kernel_sha256": "6b01bb11de95bd51c10b7decb6a0c2a2ebe9f8d7147371a035b149bcc2d37383",
+      "environment": {
+        "recorded_at": "2026-10-02T02:08:21.7050152Z",
+        "runner_name": "GitHub Actions 1000001263",
+        "runner_os": "Windows",
+        "runner_arch": "X64",
+        "image_os": "win25-vs2026",
+        "image_version": "20260925.250.1",
+        "requested_runner_image": "windows-2025",
+        "os_version": "10.0.26100.0",
+        "powershell_version": "7.6.6",
+        "repository_commit": "dbe42ef3f82826ee20d6c9a60bbb3196b0352084",
+        "workflow_run_id": "36954184208",
+        "os": {
+          "Caption": "Microsoft Windows Server 2025 Datacenter",
+          "Version": "10.0.26100",
+          "BuildNumber": "26100",
+          "OSArchitecture": "64-bit"
+        },
+        "nat": {
+          "status": "recorded",
+          "entries": [],
+          "error": null
+        },
+        "public_identity": {
+          "status": "observed",
+          "address": "20.49.14.176",
+          "endpoint": "https://api.ipify.org",
+          "error": null
+        },
+        "firewall_profiles": [
+          {
+            "Name": "Domain",
+            "Enabled": 1,
+            "DefaultInboundAction": 0,
+            "DefaultOutboundAction": 0
+          },
+          {
+            "Name": "Private",
+            "Enabled": 1,
+            "DefaultInboundAction": 0,
+            "DefaultOutboundAction": 0
+          },
+          {
+            "Name": "Public",
+            "Enabled": 1,
+            "DefaultInboundAction": 0,
+            "DefaultOutboundAction": 0
+          }
+        ],
+        "limitations": [
+          "Get-NetNat reports guest-configured NAT only; an empty result cannot exclude provider-side NAT.",
+          "HTTPS public identity is a best-effort egress observation; it cannot identify which network device filters ICMP."
+        ]
+      },
+      "physical_exit": {
+        "name": "Ethernet 3",
+        "index": 14,
+        "description": "Microsoft Hyper-V Network Adapter #3",
+        "addresses": [
+          "10.1.0.100"
+        ]
+      },
+      "preflight_default": {
+        "target": "223.5.5.5",
+        "firewall_condition": "default firewall before diagnostic rule",
+        "observations": [
+          {
+            "attempt": 1,
+            "ttl": 128,
+            "status": "TimedOut",
+            "address": "223.5.5.5",
+            "roundtrip_ms": 0,
+            "error": null
+          },
+          {
+            "attempt": 2,
+            "ttl": 128,
+            "status": "TimedOut",
+            "address": "223.5.5.5",
+            "roundtrip_ms": 0,
+            "error": null
+          }
+        ]
+      },
+      "preflight_allowed": {
+        "target": "223.5.5.5",
+        "firewall_condition": "physical-interface ICMP allow active",
+        "observations": [
+          {
+            "attempt": 1,
+            "ttl": 128,
+            "status": "TimedOut",
+            "address": "223.5.5.5",
+            "roundtrip_ms": 0,
+            "error": null
+          },
+          {
+            "attempt": 2,
+            "ttl": 128,
+            "status": "TimedOut",
+            "address": "223.5.5.5",
+            "roundtrip_ms": 0,
+            "error": null
+          }
+        ]
+      },
+      "tcp_controls": {
+        "observations": [
+          {
+            "target": "223.5.5.5",
+            "port": 443,
+            "connected": true,
+            "elapsed_ms": 96,
+            "local_endpoint": "10.1.0.100:52634",
+            "error": null
+          },
+          {
+            "target": "223.5.5.5",
+            "port": 53,
+            "connected": true,
+            "elapsed_ms": 89,
+            "local_endpoint": "10.1.0.100:52635",
+            "error": null
+          }
+        ],
+        "interpretation": "TCP reachability is an independent connectivity control; it does not prove that ICMP Echo or Time Exceeded is permitted."
+      },
+      "firewall": {
+        "condition": "physical-interface temporary inbound ICMPv4 allow",
+        "rule": {
+          "name": "MihomoPublicICMP-2720-7bc8bd9f6208419baa8329e6c3015bb8",
+          "direction": "Inbound",
+          "action": "Allow",
+          "profile": "Any",
+          "protocol": "ICMPv4",
+          "types": [
+            "0",
+            "3",
+            "11",
+            "12"
+          ],
+          "program": "Any",
+          "remote_address": "Any",
+          "interface_alias": "Ethernet 3",
+          "interface_index": 14
+        },
+        "added": true,
+        "removed": true,
+        "cleanup_error": null,
+        "default_policies_changed": false
+      },
+      "scenarios": [
+        {
+          "scenario": "baseline",
+          "status": "inconclusive",
+          "reason": "BestTrace completed without a responding target",
+          "tun_route_verified": false,
+          "icmp_handler_log_seen": false,
+          "trace_setup_error": false,
+          "runtime_failure": false,
+          "cleanup": {
+            "graceful_tun_disable": false,
+            "residual_target_routes": [],
+            "error": null
+          },
+          "gui": {
+            "trace_started": true,
+            "trace_completed": true,
+            "probe_mode": "ICMP",
+            "max_hops_requested": 32,
+            "max_hops_actual": 32,
+            "max_hops_verified": true,
+            "hops": [],
+            "intermediate_hops": [],
+            "row_count": 32,
+            "rows_file": "evidence/windows/public-comparison/windows-2025/223_5_5_5/off-rows.tsv",
+            "rows_sha256": "4f465b93ddc43222e339fd2a5118fbf37b75e82a8214ec53e9be870ad212a39e"
+          },
+          "screenshot": "evidence/windows/public-comparison/windows-2025/223_5_5_5/off.png",
+          "screenshot_sha256": "2fd95823349dd783d72def63bef134bdf41d4cf69833309dd176b972d31bca8a",
+          "pcapng_sha256": "8f98a76d421e5c0ba495ddccfcf02af4f80974653069e3f27f2c7c4aaf9714fe",
+          "independent_capture": {
+            "outgoing_echo_count": 204,
+            "outgoing_ttls": [
+              1,
+              2,
+              3,
+              4,
+              5,
+              6,
+              7,
+              8,
+              9,
+              10,
+              11,
+              12,
+              13,
+              14,
+              15,
+              16,
+              17,
+              18,
+              19,
+              20,
+              21,
+              22,
+              23,
+              24,
+              25,
+              26,
+              27,
+              28,
+              29,
+              30,
+              31,
+              32,
+              64,
+              128
+            ],
+            "incoming_echo_reply_from_target_count": 0,
+            "incoming_icmp_error_count": 0,
+            "incoming_router_addresses": [],
+            "restored_to_tun_count": 0,
+            "original_tun_echo_count": 0,
+            "translated_identifier_count": 0,
+            "parse_notes": []
+          }
+        },
+        {
+          "scenario": "trace-mixed",
+          "status": "inconclusive",
+          "reason": "BestTrace completed without a responding target",
+          "tun_route_verified": true,
+          "icmp_handler_log_seen": true,
+          "trace_setup_error": false,
+          "runtime_failure": false,
+          "cleanup": {
+            "graceful_tun_disable": true,
+            "residual_target_routes": [],
+            "error": null
+          },
+          "gui": {
+            "trace_started": true,
+            "trace_completed": true,
+            "probe_mode": "ICMP",
+            "max_hops_requested": 32,
+            "max_hops_actual": 32,
+            "max_hops_verified": true,
+            "hops": [],
+            "intermediate_hops": [],
+            "row_count": 32,
+            "rows_file": "evidence/windows/public-comparison/windows-2025/223_5_5_5/mixed-rows.tsv",
+            "rows_sha256": "4f465b93ddc43222e339fd2a5118fbf37b75e82a8214ec53e9be870ad212a39e"
+          },
+          "screenshot": "evidence/windows/public-comparison/windows-2025/223_5_5_5/mixed.png",
+          "screenshot_sha256": "b11ffd6dca18f5bae90ff42e612220a476f9527d46a709d34f9c2a0e730ac933",
+          "pcapng_sha256": "5ec425fc4bffd41ed601db72103332622cb5c034db006c046558b481cd5bed42",
+          "independent_capture": {
+            "outgoing_echo_count": 204,
+            "outgoing_ttls": [
+              1,
+              2,
+              3,
+              4,
+              5,
+              6,
+              7,
+              8,
+              9,
+              10,
+              11,
+              12,
+              13,
+              14,
+              15,
+              16,
+              17,
+              18,
+              19,
+              20,
+              21,
+              22,
+              23,
+              24,
+              25,
+              26,
+              27,
+              28,
+              29,
+              30,
+              31,
+              32,
+              64,
+              128
+            ],
+            "incoming_echo_reply_from_target_count": 0,
+            "incoming_icmp_error_count": 0,
+            "incoming_router_addresses": [],
+            "restored_to_tun_count": 0,
+            "original_tun_echo_count": 204,
+            "translated_identifier_count": 203,
+            "parse_notes": []
+          }
+        },
+        {
+          "scenario": "trace-gvisor",
+          "status": "inconclusive",
+          "reason": "BestTrace completed without a responding target",
+          "tun_route_verified": true,
+          "icmp_handler_log_seen": true,
+          "trace_setup_error": false,
+          "runtime_failure": false,
+          "cleanup": {
+            "graceful_tun_disable": true,
+            "residual_target_routes": [],
+            "error": null
+          },
+          "gui": {
+            "trace_started": true,
+            "trace_completed": true,
+            "probe_mode": "ICMP",
+            "max_hops_requested": 32,
+            "max_hops_actual": 32,
+            "max_hops_verified": true,
+            "hops": [],
+            "intermediate_hops": [],
+            "row_count": 32,
+            "rows_file": "evidence/windows/public-comparison/windows-2025/223_5_5_5/gvisor-rows.tsv",
+            "rows_sha256": "4f465b93ddc43222e339fd2a5118fbf37b75e82a8214ec53e9be870ad212a39e"
+          },
+          "screenshot": "evidence/windows/public-comparison/windows-2025/223_5_5_5/gvisor.png",
+          "screenshot_sha256": "b11ffd6dca18f5bae90ff42e612220a476f9527d46a709d34f9c2a0e730ac933",
+          "pcapng_sha256": "042f50de4fc802a1b2f764fc693292c17c8fa4ae147550bb0594a7ce02d87813",
+          "independent_capture": {
+            "outgoing_echo_count": 204,
+            "outgoing_ttls": [
+              1,
+              2,
+              3,
+              4,
+              5,
+              6,
+              7,
+              8,
+              9,
+              10,
+              11,
+              12,
+              13,
+              14,
+              15,
+              16,
+              17,
+              18,
+              19,
+              20,
+              21,
+              22,
+              23,
+              24,
+              25,
+              26,
+              27,
+              28,
+              29,
+              30,
+              31,
+              32,
+              64,
+              128
+            ],
+            "incoming_echo_reply_from_target_count": 0,
+            "incoming_icmp_error_count": 0,
+            "incoming_router_addresses": [],
+            "restored_to_tun_count": 0,
+            "original_tun_echo_count": 204,
+            "translated_identifier_count": 203,
+            "parse_notes": []
+          }
+        }
+      ]
+    },
+    {
+      "status": "inconclusive",
+      "reason": "BestTrace without TUN has no usable intermediate-hop baseline on this Windows network",
+      "target": "8.8.8.8",
+      "tested_kernel_run_id": "36913225840",
+      "actual_kernel_sha256": "6b01bb11de95bd51c10b7decb6a0c2a2ebe9f8d7147371a035b149bcc2d37383",
+      "environment": {
+        "recorded_at": "2026-10-02T02:08:23.7825872Z",
+        "runner_name": "GitHub Actions 1000001266",
+        "runner_os": "Windows",
+        "runner_arch": "X64",
+        "image_os": "win25-vs2026",
+        "image_version": "20260925.250.1",
+        "requested_runner_image": "windows-2025",
+        "os_version": "10.0.26100.0",
+        "powershell_version": "7.6.6",
+        "repository_commit": "dbe42ef3f82826ee20d6c9a60bbb3196b0352084",
+        "workflow_run_id": "36954184208",
+        "os": {
+          "Caption": "Microsoft Windows Server 2025 Datacenter",
+          "Version": "10.0.26100",
+          "BuildNumber": "26100",
+          "OSArchitecture": "64-bit"
+        },
+        "nat": {
+          "status": "recorded",
+          "entries": [],
+          "error": null
+        },
+        "public_identity": {
+          "status": "observed",
+          "address": "64.236.142.129",
+          "endpoint": "https://api.ipify.org",
+          "error": null
+        },
+        "firewall_profiles": [
+          {
+            "Name": "Domain",
+            "Enabled": 1,
+            "DefaultInboundAction": 0,
+            "DefaultOutboundAction": 0
+          },
+          {
+            "Name": "Private",
+            "Enabled": 1,
+            "DefaultInboundAction": 0,
+            "DefaultOutboundAction": 0
+          },
+          {
+            "Name": "Public",
+            "Enabled": 1,
+            "DefaultInboundAction": 0,
+            "DefaultOutboundAction": 0
+          }
+        ],
+        "limitations": [
+          "Get-NetNat reports guest-configured NAT only; an empty result cannot exclude provider-side NAT.",
+          "HTTPS public identity is a best-effort egress observation; it cannot identify which network device filters ICMP."
+        ]
+      },
+      "physical_exit": {
+        "name": "Ethernet 3",
+        "index": 14,
+        "description": "Microsoft Hyper-V Network Adapter #3",
+        "addresses": [
+          "10.1.0.104"
+        ]
+      },
+      "preflight_default": {
+        "target": "8.8.8.8",
+        "firewall_condition": "default firewall before diagnostic rule",
+        "observations": [
+          {
+            "attempt": 1,
+            "ttl": 128,
+            "status": "TimedOut",
+            "address": "8.8.8.8",
+            "roundtrip_ms": 0,
+            "error": null
+          },
+          {
+            "attempt": 2,
+            "ttl": 128,
+            "status": "TimedOut",
+            "address": "8.8.8.8",
+            "roundtrip_ms": 0,
+            "error": null
+          }
+        ]
+      },
+      "preflight_allowed": {
+        "target": "8.8.8.8",
+        "firewall_condition": "physical-interface ICMP allow active",
+        "observations": [
+          {
+            "attempt": 1,
+            "ttl": 128,
+            "status": "TimedOut",
+            "address": "8.8.8.8",
+            "roundtrip_ms": 0,
+            "error": null
+          },
+          {
+            "attempt": 2,
+            "ttl": 128,
+            "status": "TimedOut",
+            "address": "8.8.8.8",
+            "roundtrip_ms": 0,
+            "error": null
+          }
+        ]
+      },
+      "tcp_controls": {
+        "observations": [
+          {
+            "target": "8.8.8.8",
+            "port": 443,
+            "connected": true,
+            "elapsed_ms": 15,
+            "local_endpoint": "10.1.0.104:52264",
+            "error": null
+          },
+          {
+            "target": "8.8.8.8",
+            "port": 53,
+            "connected": true,
+            "elapsed_ms": 2,
+            "local_endpoint": "10.1.0.104:52265",
+            "error": null
+          }
+        ],
+        "interpretation": "TCP reachability is an independent connectivity control; it does not prove that ICMP Echo or Time Exceeded is permitted."
+      },
+      "firewall": {
+        "condition": "physical-interface temporary inbound ICMPv4 allow",
+        "rule": {
+          "name": "MihomoPublicICMP-6576-79a1424aa9dd46e29f41198ba20d241a",
+          "direction": "Inbound",
+          "action": "Allow",
+          "profile": "Any",
+          "protocol": "ICMPv4",
+          "types": [
+            "0",
+            "3",
+            "11",
+            "12"
+          ],
+          "program": "Any",
+          "remote_address": "Any",
+          "interface_alias": "Ethernet 3",
+          "interface_index": 14
+        },
+        "added": true,
+        "removed": true,
+        "cleanup_error": null,
+        "default_policies_changed": false
+      },
+      "scenarios": [
+        {
+          "scenario": "baseline",
+          "status": "inconclusive",
+          "reason": "BestTrace completed without a responding target",
+          "tun_route_verified": false,
+          "icmp_handler_log_seen": false,
+          "trace_setup_error": false,
+          "runtime_failure": false,
+          "cleanup": {
+            "graceful_tun_disable": false,
+            "residual_target_routes": [],
+            "error": null
+          },
+          "gui": {
+            "trace_started": true,
+            "trace_completed": true,
+            "probe_mode": "ICMP",
+            "max_hops_requested": 32,
+            "max_hops_actual": 32,
+            "max_hops_verified": true,
+            "hops": [],
+            "intermediate_hops": [],
+            "row_count": 32,
+            "rows_file": "evidence/windows/public-comparison/windows-2025/8_8_8_8/off-rows.tsv",
+            "rows_sha256": "4f465b93ddc43222e339fd2a5118fbf37b75e82a8214ec53e9be870ad212a39e"
+          },
+          "screenshot": "evidence/windows/public-comparison/windows-2025/8_8_8_8/off.png",
+          "screenshot_sha256": "c479790a4e5c4985fe306c893a6580b66511818cdf00ae2065062610e4f6b69d",
+          "pcapng_sha256": "57e9ad6ffbf5b471c5808c48c2957596fe4ec52ed24f2d2e5df9263c3fa3c352",
+          "independent_capture": {
+            "outgoing_echo_count": 204,
+            "outgoing_ttls": [
+              1,
+              2,
+              3,
+              4,
+              5,
+              6,
+              7,
+              8,
+              9,
+              10,
+              11,
+              12,
+              13,
+              14,
+              15,
+              16,
+              17,
+              18,
+              19,
+              20,
+              21,
+              22,
+              23,
+              24,
+              25,
+              26,
+              27,
+              28,
+              29,
+              30,
+              31,
+              32,
+              64,
+              128
+            ],
+            "incoming_echo_reply_from_target_count": 0,
+            "incoming_icmp_error_count": 0,
+            "incoming_router_addresses": [],
+            "restored_to_tun_count": 0,
+            "original_tun_echo_count": 0,
+            "translated_identifier_count": 0,
+            "parse_notes": []
+          }
+        },
+        {
+          "scenario": "trace-mixed",
+          "status": "inconclusive",
+          "reason": "BestTrace completed without a responding target",
+          "tun_route_verified": true,
+          "icmp_handler_log_seen": true,
+          "trace_setup_error": false,
+          "runtime_failure": false,
+          "cleanup": {
+            "graceful_tun_disable": true,
+            "residual_target_routes": [],
+            "error": null
+          },
+          "gui": {
+            "trace_started": true,
+            "trace_completed": true,
+            "probe_mode": "ICMP",
+            "max_hops_requested": 32,
+            "max_hops_actual": 32,
+            "max_hops_verified": true,
+            "hops": [],
+            "intermediate_hops": [],
+            "row_count": 32,
+            "rows_file": "evidence/windows/public-comparison/windows-2025/8_8_8_8/mixed-rows.tsv",
+            "rows_sha256": "4f465b93ddc43222e339fd2a5118fbf37b75e82a8214ec53e9be870ad212a39e"
+          },
+          "screenshot": "evidence/windows/public-comparison/windows-2025/8_8_8_8/mixed.png",
+          "screenshot_sha256": "c479790a4e5c4985fe306c893a6580b66511818cdf00ae2065062610e4f6b69d",
+          "pcapng_sha256": "51ff65cd4cfac08d161282a6dc1dd26ad4bd435978f84c76bd7710a2547aca06",
+          "independent_capture": {
+            "outgoing_echo_count": 204,
+            "outgoing_ttls": [
+              1,
+              2,
+              3,
+              4,
+              5,
+              6,
+              7,
+              8,
+              9,
+              10,
+              11,
+              12,
+              13,
+              14,
+              15,
+              16,
+              17,
+              18,
+              19,
+              20,
+              21,
+              22,
+              23,
+              24,
+              25,
+              26,
+              27,
+              28,
+              29,
+              30,
+              31,
+              32,
+              64,
+              128
+            ],
+            "incoming_echo_reply_from_target_count": 0,
+            "incoming_icmp_error_count": 0,
+            "incoming_router_addresses": [],
+            "restored_to_tun_count": 0,
+            "original_tun_echo_count": 204,
+            "translated_identifier_count": 203,
+            "parse_notes": []
+          }
+        },
+        {
+          "scenario": "trace-gvisor",
+          "status": "inconclusive",
+          "reason": "BestTrace completed without a responding target",
+          "tun_route_verified": true,
+          "icmp_handler_log_seen": true,
+          "trace_setup_error": false,
+          "runtime_failure": false,
+          "cleanup": {
+            "graceful_tun_disable": true,
+            "residual_target_routes": [],
+            "error": null
+          },
+          "gui": {
+            "trace_started": true,
+            "trace_completed": true,
+            "probe_mode": "ICMP",
+            "max_hops_requested": 32,
+            "max_hops_actual": 32,
+            "max_hops_verified": true,
+            "hops": [],
+            "intermediate_hops": [],
+            "row_count": 32,
+            "rows_file": "evidence/windows/public-comparison/windows-2025/8_8_8_8/gvisor-rows.tsv",
+            "rows_sha256": "4f465b93ddc43222e339fd2a5118fbf37b75e82a8214ec53e9be870ad212a39e"
+          },
+          "screenshot": "evidence/windows/public-comparison/windows-2025/8_8_8_8/gvisor.png",
+          "screenshot_sha256": "c479790a4e5c4985fe306c893a6580b66511818cdf00ae2065062610e4f6b69d",
+          "pcapng_sha256": "cdee6a04cb6a6c2262c233ce65ba6ddd7849711a54e0bdec11af2bb78d2f4f48",
+          "independent_capture": {
+            "outgoing_echo_count": 204,
+            "outgoing_ttls": [
+              1,
+              2,
+              3,
+              4,
+              5,
+              6,
+              7,
+              8,
+              9,
+              10,
+              11,
+              12,
+              13,
+              14,
+              15,
+              16,
+              17,
+              18,
+              19,
+              20,
+              21,
+              22,
+              23,
+              24,
+              25,
+              26,
+              27,
+              28,
+              29,
+              30,
+              31,
+              32,
+              64,
+              128
+            ],
+            "incoming_echo_reply_from_target_count": 0,
+            "incoming_icmp_error_count": 0,
+            "incoming_router_addresses": [],
+            "restored_to_tun_count": 0,
+            "original_tun_echo_count": 204,
+            "translated_identifier_count": 203,
+            "parse_notes": []
+          }
+        }
+      ]
+    },
+    {
+      "status": "inconclusive",
+      "reason": "BestTrace without TUN has no usable intermediate-hop baseline on this Windows network",
+      "target": "9.9.9.9",
+      "tested_kernel_run_id": "36913225840",
+      "actual_kernel_sha256": "6b01bb11de95bd51c10b7decb6a0c2a2ebe9f8d7147371a035b149bcc2d37383",
+      "environment": {
+        "recorded_at": "2026-10-02T02:08:16.1159081Z",
+        "runner_name": "GitHub Actions 1000001265",
+        "runner_os": "Windows",
+        "runner_arch": "X64",
+        "image_os": "win25-vs2026",
+        "image_version": "20260925.250.1",
+        "requested_runner_image": "windows-2025",
+        "os_version": "10.0.26100.0",
+        "powershell_version": "7.6.6",
+        "repository_commit": "dbe42ef3f82826ee20d6c9a60bbb3196b0352084",
+        "workflow_run_id": "36954184208",
+        "os": {
+          "Caption": "Microsoft Windows Server 2025 Datacenter",
+          "Version": "10.0.26100",
+          "BuildNumber": "26100",
+          "OSArchitecture": "64-bit"
+        },
+        "nat": {
+          "status": "recorded",
+          "entries": [],
+          "error": null
+        },
+        "public_identity": {
+          "status": "observed",
+          "address": "135.232.200.33",
+          "endpoint": "https://api.ipify.org",
+          "error": null
+        },
+        "firewall_profiles": [
+          {
+            "Name": "Domain",
+            "Enabled": 1,
+            "DefaultInboundAction": 0,
+            "DefaultOutboundAction": 0
+          },
+          {
+            "Name": "Private",
+            "Enabled": 1,
+            "DefaultInboundAction": 0,
+            "DefaultOutboundAction": 0
+          },
+          {
+            "Name": "Public",
+            "Enabled": 1,
+            "DefaultInboundAction": 0,
+            "DefaultOutboundAction": 0
+          }
+        ],
+        "limitations": [
+          "Get-NetNat reports guest-configured NAT only; an empty result cannot exclude provider-side NAT.",
+          "HTTPS public identity is a best-effort egress observation; it cannot identify which network device filters ICMP."
+        ]
+      },
+      "physical_exit": {
+        "name": "Ethernet 3",
+        "index": 14,
+        "description": "Microsoft Hyper-V Network Adapter #3",
+        "addresses": [
+          "10.1.0.108"
+        ]
+      },
+      "preflight_default": {
+        "target": "9.9.9.9",
+        "firewall_condition": "default firewall before diagnostic rule",
+        "observations": [
+          {
+            "attempt": 1,
+            "ttl": 128,
+            "status": "TimedOut",
+            "address": "9.9.9.9",
+            "roundtrip_ms": 0,
+            "error": null
+          },
+          {
+            "attempt": 2,
+            "ttl": 128,
+            "status": "TimedOut",
+            "address": "9.9.9.9",
+            "roundtrip_ms": 0,
+            "error": null
+          }
+        ]
+      },
+      "preflight_allowed": {
+        "target": "9.9.9.9",
+        "firewall_condition": "physical-interface ICMP allow active",
+        "observations": [
+          {
+            "attempt": 1,
+            "ttl": 128,
+            "status": "TimedOut",
+            "address": "9.9.9.9",
+            "roundtrip_ms": 0,
+            "error": null
+          },
+          {
+            "attempt": 2,
+            "ttl": 128,
+            "status": "TimedOut",
+            "address": "9.9.9.9",
+            "roundtrip_ms": 0,
+            "error": null
+          }
+        ]
+      },
+      "tcp_controls": {
+        "observations": [
+          {
+            "target": "9.9.9.9",
+            "port": 443,
+            "connected": true,
+            "elapsed_ms": 13,
+            "local_endpoint": "10.1.0.108:53418",
+            "error": null
+          },
+          {
+            "target": "9.9.9.9",
+            "port": 53,
+            "connected": true,
+            "elapsed_ms": 2,
+            "local_endpoint": "10.1.0.108:53419",
+            "error": null
+          }
+        ],
+        "interpretation": "TCP reachability is an independent connectivity control; it does not prove that ICMP Echo or Time Exceeded is permitted."
+      },
+      "firewall": {
+        "condition": "physical-interface temporary inbound ICMPv4 allow",
+        "rule": {
+          "name": "MihomoPublicICMP-9128-e7971cf3a7674c2195588be3e51c3f9f",
+          "direction": "Inbound",
+          "action": "Allow",
+          "profile": "Any",
+          "protocol": "ICMPv4",
+          "types": [
+            "0",
+            "3",
+            "11",
+            "12"
+          ],
+          "program": "Any",
+          "remote_address": "Any",
+          "interface_alias": "Ethernet 3",
+          "interface_index": 14
+        },
+        "added": true,
+        "removed": true,
+        "cleanup_error": null,
+        "default_policies_changed": false
+      },
+      "scenarios": [
+        {
+          "scenario": "baseline",
+          "status": "inconclusive",
+          "reason": "BestTrace completed without a responding target",
+          "tun_route_verified": false,
+          "icmp_handler_log_seen": false,
+          "trace_setup_error": false,
+          "runtime_failure": false,
+          "cleanup": {
+            "graceful_tun_disable": false,
+            "residual_target_routes": [],
+            "error": null
+          },
+          "gui": {
+            "trace_started": true,
+            "trace_completed": true,
+            "probe_mode": "ICMP",
+            "max_hops_requested": 32,
+            "max_hops_actual": 32,
+            "max_hops_verified": true,
+            "hops": [],
+            "intermediate_hops": [],
+            "row_count": 32,
+            "rows_file": "evidence/windows/public-comparison/windows-2025/9_9_9_9/off-rows.tsv",
+            "rows_sha256": "4f465b93ddc43222e339fd2a5118fbf37b75e82a8214ec53e9be870ad212a39e"
+          },
+          "screenshot": "evidence/windows/public-comparison/windows-2025/9_9_9_9/off.png",
+          "screenshot_sha256": "a587066bdbcfb1a1d5d3a469234d058ae967ba0cff6ab993b77fc24031f78419",
+          "pcapng_sha256": "11069672f857ad28cb66a94d42018a7e935dd1463f1b8a2eced00b728e0b9afd",
+          "independent_capture": {
+            "outgoing_echo_count": 204,
+            "outgoing_ttls": [
+              1,
+              2,
+              3,
+              4,
+              5,
+              6,
+              7,
+              8,
+              9,
+              10,
+              11,
+              12,
+              13,
+              14,
+              15,
+              16,
+              17,
+              18,
+              19,
+              20,
+              21,
+              22,
+              23,
+              24,
+              25,
+              26,
+              27,
+              28,
+              29,
+              30,
+              31,
+              32,
+              64,
+              128
+            ],
+            "incoming_echo_reply_from_target_count": 0,
+            "incoming_icmp_error_count": 0,
+            "incoming_router_addresses": [],
+            "restored_to_tun_count": 0,
+            "original_tun_echo_count": 0,
+            "translated_identifier_count": 0,
+            "parse_notes": []
+          }
+        },
+        {
+          "scenario": "trace-mixed",
+          "status": "inconclusive",
+          "reason": "BestTrace completed without a responding target",
+          "tun_route_verified": true,
+          "icmp_handler_log_seen": true,
+          "trace_setup_error": false,
+          "runtime_failure": false,
+          "cleanup": {
+            "graceful_tun_disable": true,
+            "residual_target_routes": [],
+            "error": null
+          },
+          "gui": {
+            "trace_started": true,
+            "trace_completed": true,
+            "probe_mode": "ICMP",
+            "max_hops_requested": 32,
+            "max_hops_actual": 32,
+            "max_hops_verified": true,
+            "hops": [],
+            "intermediate_hops": [],
+            "row_count": 32,
+            "rows_file": "evidence/windows/public-comparison/windows-2025/9_9_9_9/mixed-rows.tsv",
+            "rows_sha256": "4f465b93ddc43222e339fd2a5118fbf37b75e82a8214ec53e9be870ad212a39e"
+          },
+          "screenshot": "evidence/windows/public-comparison/windows-2025/9_9_9_9/mixed.png",
+          "screenshot_sha256": "8f72f75ce137638d77f2dee7a81913a26d4846cedf7a02b09ec698a6d3b13b63",
+          "pcapng_sha256": "155cf8105b8e27cc030d8fa48cebf1d32092d7ef4829132d03012bd1a99173ce",
+          "independent_capture": {
+            "outgoing_echo_count": 204,
+            "outgoing_ttls": [
+              1,
+              2,
+              3,
+              4,
+              5,
+              6,
+              7,
+              8,
+              9,
+              10,
+              11,
+              12,
+              13,
+              14,
+              15,
+              16,
+              17,
+              18,
+              19,
+              20,
+              21,
+              22,
+              23,
+              24,
+              25,
+              26,
+              27,
+              28,
+              29,
+              30,
+              31,
+              32,
+              64,
+              128
+            ],
+            "incoming_echo_reply_from_target_count": 0,
+            "incoming_icmp_error_count": 0,
+            "incoming_router_addresses": [],
+            "restored_to_tun_count": 0,
+            "original_tun_echo_count": 204,
+            "translated_identifier_count": 203,
+            "parse_notes": []
+          }
+        },
+        {
+          "scenario": "trace-gvisor",
+          "status": "inconclusive",
+          "reason": "BestTrace completed without a responding target",
+          "tun_route_verified": true,
+          "icmp_handler_log_seen": true,
+          "trace_setup_error": false,
+          "runtime_failure": false,
+          "cleanup": {
+            "graceful_tun_disable": true,
+            "residual_target_routes": [],
+            "error": null
+          },
+          "gui": {
+            "trace_started": true,
+            "trace_completed": true,
+            "probe_mode": "ICMP",
+            "max_hops_requested": 32,
+            "max_hops_actual": 32,
+            "max_hops_verified": true,
+            "hops": [],
+            "intermediate_hops": [],
+            "row_count": 32,
+            "rows_file": "evidence/windows/public-comparison/windows-2025/9_9_9_9/gvisor-rows.tsv",
+            "rows_sha256": "4f465b93ddc43222e339fd2a5118fbf37b75e82a8214ec53e9be870ad212a39e"
+          },
+          "screenshot": "evidence/windows/public-comparison/windows-2025/9_9_9_9/gvisor.png",
+          "screenshot_sha256": "8f72f75ce137638d77f2dee7a81913a26d4846cedf7a02b09ec698a6d3b13b63",
+          "pcapng_sha256": "141e86471027ad8e43716bb4902548a692af3043b00b5b61ab7551c98d471c69",
+          "independent_capture": {
+            "outgoing_echo_count": 204,
+            "outgoing_ttls": [
+              1,
+              2,
+              3,
+              4,
+              5,
+              6,
+              7,
+              8,
+              9,
+              10,
+              11,
+              12,
+              13,
+              14,
+              15,
+              16,
+              17,
+              18,
+              19,
+              20,
+              21,
+              22,
+              23,
+              24,
+              25,
+              26,
+              27,
+              28,
+              29,
+              30,
+              31,
+              32,
+              64,
+              128
+            ],
+            "incoming_echo_reply_from_target_count": 0,
+            "incoming_icmp_error_count": 0,
+            "incoming_router_addresses": [],
+            "restored_to_tun_count": 0,
+            "original_tun_echo_count": 204,
+            "translated_identifier_count": 203,
+            "parse_notes": []
+          }
+        }
+      ]
+    }
+  ],
+  "limitations": [
+    "No normal responding public baseline is available on either hosted Windows network; packet observations do not identify a specific cloud filtering device.",
+    "Screenshots show the visible table viewport; JSON contains all 32 completed rows.",
+    "Physical outbound TTL and TUN identifier translation observed; real public ICMP return path remains unverified."
+  ]
+}

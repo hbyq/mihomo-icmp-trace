@@ -58,6 +58,9 @@ macOS 尚未做实际运行验证。
 - Windows Server 2022 受控 IPv4 路径已实际显示 BestTrace 三跳和延迟，并独立关联
   TUN 中的原始探测与恢复回包。原生 IPv4/IPv6 loopback 以及 RR 设置/清除已在 Windows 执行；
   完整 Windows 回归已通过（显式放行 ICMP 错误）；默认防火墙失败原因及未覆盖场景见 [验证记录](WINDOWS_VALIDATION.md)。
+- Windows Server 2022/2025 × 四个公网 IP 的 24 次 BestTrace 对照已完成；关闭/开启 TUN
+  均为 32 跳全超时，TCP 可通、物理出口 TTL 保留，但未收到 ICMP 回应，公网结果仍为不确定。
+  [查看全部原始对照截图与证据](WINDOWS_VALIDATION.md#2026-10-02真实公网多目标对照)。
 - Windows 10/11 桌面、真实公网完整路径、Windows IPv6 TUN/Fake-IP、
   Clash Verge 服务模式与 Tailscale 共存尚未完成验收。
 

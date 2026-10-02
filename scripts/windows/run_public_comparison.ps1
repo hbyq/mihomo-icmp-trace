@@ -122,6 +122,9 @@ $comparison = [ordered]@{
         'Each target receives an OFF, mixed, and gvisor comparison on this runner image only.')
 }
 try {
+    if (Test-Path -LiteralPath $runtimeDirectory) {
+        throw 'Use a new OutputDir: an existing runtime directory could mix current and previous evidence.'
+    }
     $KernelPath = (Resolve-Path -LiteralPath $KernelPath).Path
     $BestTracePath = (Resolve-Path -LiteralPath $BestTracePath).Path
     $comparison.actual_kernel_sha256 = (Get-FileHash -LiteralPath $KernelPath -Algorithm SHA256).Hash.ToLowerInvariant()
@@ -155,8 +158,10 @@ try {
     $validation = Get-Content -LiteralPath $comparison.validation_summary_path -Raw | ConvertFrom-Json -AsHashtable
     $comparison.status = $validation['status']; $comparison.reason = $validation['reason']
     $comparison.scenarios = @($validation['scenarios'])
-    if ($validationExit -eq 0 -and $comparison.status -ne 'pass') { throw 'Validation exited zero without a pass result.' }
-    if ($validationExit -eq 2 -and $comparison.status -ne 'inconclusive') { throw 'Validation exit 2 did not report an inconclusive result.' }
+    $expectedStatuses = @{ 0 = 'pass'; 1 = 'fail'; 2 = 'inconclusive'; 3 = 'blocked' }
+    if (-not $expectedStatuses.ContainsKey($validationExit) -or $comparison.status -ne $expectedStatuses[$validationExit]) {
+        throw "Validation exit $validationExit is inconsistent with result $($comparison.status)."
+    }
 } catch {
     $comparison.status = 'blocked'; $comparison.reason = $_.Exception.Message
     $comparison.fatal_error = $_.Exception.ToString(); $validationExit = 3

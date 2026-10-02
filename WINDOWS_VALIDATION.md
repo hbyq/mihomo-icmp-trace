@@ -7,6 +7,63 @@
 
 默认防火墙诊断保留“中间跳缺失”的失败；公网基线不可用，保持不确定，未计为公网路径通过。
 
+## 2026-10-02：真实公网多目标对照
+
+[任务 36954184208](https://github.com/hbyq/mihomo-icmp-trace/actions/runs/36954184208)
+已在 **Windows Server 2022 / 2025** 分别对 `1.1.1.1`、`8.8.8.8`、`9.9.9.9`、
+`223.5.5.5` 运行关闭 TUN、开启 mixed trace、开启 gvisor trace，共 24 次实际 BestTrace。
+使用同一份已验证内核，SHA256 为 `6b01bb11de95bd51c10b7decb6a0c2a2ebe9f8d7147371a035b149bcc2d37383`。
+本轮没有启用夹具，也没有生成模拟回应。
+
+**所有 24 次都实际完成 32 跳，但全部为 `*`；公网验收仍是不确定。**
+GUI 原生下拉框实际选中并读回 32，`tracert` 同样探测 32 跳，Windows Ping API
+补测 TTL 64 / 128。因此结果不能归因于仅探测三跳、最大跳数过小或单一目标 IP。
+
+| Windows | 目标 | 关闭 TUN | mixed TUN | gvisor TUN |
+| --- | --- | --- | --- | --- |
+| 2022 | 1.1.1.1 | [原图](evidence/windows/public-comparison/windows-2022/1_1_1_1/off.png) | [原图](evidence/windows/public-comparison/windows-2022/1_1_1_1/mixed.png) | [原图](evidence/windows/public-comparison/windows-2022/1_1_1_1/gvisor.png) |
+| 2022 | 8.8.8.8 | [原图](evidence/windows/public-comparison/windows-2022/8_8_8_8/off.png) | [原图](evidence/windows/public-comparison/windows-2022/8_8_8_8/mixed.png) | [原图](evidence/windows/public-comparison/windows-2022/8_8_8_8/gvisor.png) |
+| 2022 | 9.9.9.9 | [原图](evidence/windows/public-comparison/windows-2022/9_9_9_9/off.png) | [原图](evidence/windows/public-comparison/windows-2022/9_9_9_9/mixed.png) | [原图](evidence/windows/public-comparison/windows-2022/9_9_9_9/gvisor.png) |
+| 2022 | 223.5.5.5 | [原图](evidence/windows/public-comparison/windows-2022/223_5_5_5/off.png) | [原图](evidence/windows/public-comparison/windows-2022/223_5_5_5/mixed.png) | [原图](evidence/windows/public-comparison/windows-2022/223_5_5_5/gvisor.png) |
+| 2025 | 1.1.1.1 | [原图](evidence/windows/public-comparison/windows-2025/1_1_1_1/off.png) | [原图](evidence/windows/public-comparison/windows-2025/1_1_1_1/mixed.png) | [原图](evidence/windows/public-comparison/windows-2025/1_1_1_1/gvisor.png) |
+| 2025 | 8.8.8.8 | [原图](evidence/windows/public-comparison/windows-2025/8_8_8_8/off.png) | [原图](evidence/windows/public-comparison/windows-2025/8_8_8_8/mixed.png) | [原图](evidence/windows/public-comparison/windows-2025/8_8_8_8/gvisor.png) |
+| 2025 | 9.9.9.9 | [原图](evidence/windows/public-comparison/windows-2025/9_9_9_9/off.png) | [原图](evidence/windows/public-comparison/windows-2025/9_9_9_9/mixed.png) | [原图](evidence/windows/public-comparison/windows-2025/9_9_9_9/gvisor.png) |
+| 2025 | 223.5.5.5 | [原图](evidence/windows/public-comparison/windows-2025/223_5_5_5/off.png) | [原图](evidence/windows/public-comparison/windows-2025/223_5_5_5/mixed.png) | [原图](evidence/windows/public-comparison/windows-2025/223_5_5_5/gvisor.png) |
+
+截图保留实际窗口可见区域，通常显示前约 10 行；每次完整 32 行保存在同目录的
+`off-rows.tsv` / `mixed-rows.tsv` / `gvisor-rows.tsv`。地图正常加载和地图报错两种情况
+都出现全 `*`，地图显示不能解释本轮 ICMP 无回应。
+[结构化结果与原图校验值](evidence/windows/public-comparison/validation.json) 可独立核对。
+
+独立解析每次 Pktmon 捕获，均观察到 **204 个物理出口 Echo**，TTL 覆盖 **1–32、64、128**，
+合计 4896 个；未观察到终点 Echo Reply，也没有引用目标的 ICMP 3 / 11 / 12 错误回应。
+16 个 TUN 场景都确认目标走 Wintun，并出现 DIRECT trace handler 日志，没有 setup/send failure。
+这证明公网探测经过内核且保留了逐跳 TTL；真实公网回包恢复仍未获验证。
+
+8 个 Windows/目标组合的 **TCP 443 和 53 均成功连接**，默认规则和显式放行后高 TTL ping
+均超时。全部对照使用一致的临时物理接口 ICMPv4 0 / 3 / 11 / 12 入站放行规则，测试后
+都已删除；没有关闭防火墙或修改默认策略。不能把本轮无回应归因于某一个具体上游设备，
+也没有证据要求继续修改内核或 BestTrace 来解决此公网基线限制。
+
+GitHub 托管 Windows 使用 Azure；[默认出站访问](https://learn.microsoft.com/en-us/azure/virtual-network/ip-services/default-outbound-access)
+存在 ICMP 限制，但当前 runner 的具体出口类型未公开，guest `Get-NetNat` 为空也不能排除云侧 NAT。
+[StandardV2 NAT](https://learn.microsoft.com/en-us/azure/nat-gateway/nat-gateway-resource) 支持 Echo，
+仍不支持其他 ICMP 消息，不能用它的终点 ping 证明 Time Exceeded 可用。
+下一次公网验收需要换到能收到中间路由 ICMP 错误的真实 Windows 出口，例如具备合适公共 IP
+和网络规则的 Windows VM，先确认关闭 TUN 时有可用逐跳基线，再比较开启 TUN 后的结果。
+workflow job 成功只表示证据收集完成；8 个比较结果均保留 `inconclusive`，没有转成 `pass`。
+
+### 原三跳记录的含义
+
+`192.0.2.1 → 192.0.2.2 → 203.0.113.77` 使用 RFC 5737 文档保留地址，并非实际内网路由器。
+在同一次 36913225840 的物理接口限定放行受控测试中，关闭 TUN 也得到同样三跳：
+[关闭 TUN 原图](evidence/windows/controlled-comparison/off.png) ·
+[开启 mixed 原图](evidence/windows/controlled-comparison/mixed.png) ·
+[开启 gvisor 原图](evidence/windows/controlled-comparison/gvisor.png)。
+这条路径是测试器规定的拓扑，不能从其长度推断真实公网路线。
+真实路径可能因 anycast 很近，也可能有许多不回应 ICMP 的路由器；是否有效要看同一出口、
+同一目标的 TUN 关闭/开启对照，而不是设定一个必须出现的公网跳数。
+
 ## 已完成的实测
 
 [任务 36908531308](https://github.com/hbyq/mihomo-icmp-trace/actions/runs/36908531308) 确认：
