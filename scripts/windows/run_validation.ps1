@@ -6,13 +6,16 @@ param(
     [Parameter(Mandatory = $true)][string]$BestTracePath,
     [string]$OutputDir = 'windows-validation',
     [string[]]$Targets = @('1.1.1.1', '8.8.8.8'),
-    [ValidateRange(15, 120)][int]$BestTraceTimeout = 90,
+    [ValidateRange(15, 240)][int]$BestTraceTimeout = 90,
+    [ValidateRange(1, 255)][int]$MaxHops = 30,
+    [ValidateRange(0, 255)][int]$TracertMaxHops = 0,
     [ValidateRange(0, 1000)][double]$FixtureReplyDelayMs = 5,
     [switch]$SkipPacketCapture,
     [switch]$BaselineOnly,
     [switch]$UseFixture,
     [switch]$AllowIcmpErrors,
-    [switch]$ScopeIcmpErrorsToInterface
+    [switch]$ScopeIcmpErrorsToInterface,
+    [switch]$SkipLegacy
 )
 
 Set-StrictMode -Version Latest
@@ -27,6 +30,9 @@ $script:FixtureProcess = $null
 $script:FixtureDirectory = $null
 $script:FixtureStopFile = $null
 $script:FirewallRuleName = $null
+# Keep the established fixture tracert budget unless a larger public hop
+# budget, or an explicit independent tracert budget, is requested.
+$script:TracertHopLimit = if ($TracertMaxHops -gt 0) { $TracertMaxHops } elseif ($MaxHops -ge 32) { $MaxHops } else { 12 }
 
 function Write-Json($Object, [string]$Path) {
     ConvertTo-Json -InputObject $Object -Depth 20 | Set-Content -LiteralPath $Path -Encoding utf8
@@ -182,7 +188,9 @@ function Invoke-PingApi([string]$Target, [string]$Directory) {
     $ping = [System.Net.NetworkInformation.Ping]::new()
     $payload = [System.Text.Encoding]::ASCII.GetBytes('mihomo-windows-icmp-api-validation')
     try {
-        foreach ($ttl in @(1, 2, 3, 8)) {
+        $ttls = @(1, 2, 3, 8)
+        if (-not $UseFixture -or $MaxHops -ge 32) { $ttls += @(16, 32, 64, 128) }
+        foreach ($ttl in $ttls) {
             try {
                 $options = [System.Net.NetworkInformation.PingOptions]::new($ttl, $false)
                 $reply = $ping.Send($Target, 1000, $payload, $options)
@@ -348,7 +356,7 @@ while offset+12<=len(data):
                 if p:packets.append(p)
     offset+=size
 echo=[p for p in packets if p['type']==8 and p['dst']==target and p['src'] in physical]
-keys={(p['id'],p['sequence']) for p in echo if p['ttl']<=12}
+keys={(p['id'],p['sequence']) for p in echo}
 errors_from_routers=[p for p in packets if p['type']==11 and p['src']!=target and p['dst'] in physical
                     and p.get('quote',{}).get('dst')==target and (p['quote']['id'],p['quote']['sequence']) in keys]
 original=[p for p in packets if p['type']==8 and p['dst']==target and p['src'] in tun]
@@ -389,7 +397,7 @@ open(out,'w',encoding='utf-8').write(json.dumps(result,indent=2))
 }
 
 function Run-Tools([string]$Target, [string]$Directory) {
-    $tracert = Start-CapturedProcess 'tracert.exe' @('-4', '-d', '-h', '12', '-w', '500', $Target) $Directory 'tracert'
+    $tracert = Start-CapturedProcess 'tracert.exe' @('-4', '-d', '-h', [string]$script:TracertHopLimit, '-w', '500', $Target) $Directory 'tracert'
     $ping = Start-CapturedProcess 'ping.exe' @('-4', '-n', '2', '-w', '1000', $Target) $Directory 'ping'
     $guiDirectory = Join-Path $Directory 'besttrace'
     [void](New-Item -ItemType Directory -Path $guiDirectory -Force)
@@ -397,12 +405,13 @@ function Run-Tools([string]$Target, [string]$Directory) {
     $guiFailure = $null
     try {
         $gui = Start-CapturedProcess 'python' @($script:Helper, '--exe', $BestTracePath, '--target', $Target,
-            '--output-dir', $guiDirectory, '--timeout', [string]$BestTraceTimeout) $Directory 'besttrace-helper'
+            '--output-dir', $guiDirectory, '--timeout', [string]$BestTraceTimeout,
+            '--max-hops', [string]$MaxHops) $Directory 'besttrace-helper'
     } catch { $guiFailure = $_.Exception.Message }
     $api = @(Invoke-PingApi $Target $Directory)
     if ($null -ne $gui) { $guiRun = Wait-CapturedProcess $gui ($BestTraceTimeout + 180) }
     else { $guiRun = [ordered]@{ exit_code = $null; timed_out = $false; error = $guiFailure } }
-    $tracertRun = Wait-CapturedProcess $tracert 35
+    $tracertRun = Wait-CapturedProcess $tracert ([int][math]::Ceiling($script:TracertHopLimit * 3 * 0.5 + 10))
     $pingRun = Wait-CapturedProcess $ping 8
     $resultPath = Join-Path $guiDirectory 'result.json'
     if (Test-Path -LiteralPath $resultPath) {
@@ -424,6 +433,7 @@ function Run-Scenario([string]$Name, [string]$Target, $PhysicalExit, [string]$St
     [void](New-Item -ItemType Directory -Path $directory -Force)
     $result = [ordered]@{
         scenario = $Name; target = $Target; stack = $Stack; icmp_trace = $TraceEnabled
+        requested_besttrace_max_hops = $MaxHops; actual_tracert_max_hops = $script:TracertHopLimit
         status = 'blocked'; reason = $null; physical_exit = $PhysicalExit; tun_route_verified = $false
         icmp_handler_log_seen = $false; trace_setup_error = $false; runtime_failure = $false; tools = $null; capture = $null
         directory = $directory; fixture_checks = $null; fixture_evidence = $null; tun_addresses = @()
@@ -617,6 +627,7 @@ $summary = [ordered]@{
     scope_icmp_errors_to_interface = [bool]$ScopeIcmpErrorsToInterface
     requires_correlated_tun_errors_from_both_fixture_routers = [bool]($UseFixture -and -not $BaselineOnly)
     baseline_only = [bool]$BaselineOnly
+    skip_legacy = [bool]$SkipLegacy; requested_besttrace_max_hops = $MaxHops; actual_tracert_max_hops = $script:TracertHopLimit
     limitations = @('Only IPv4 real-IP probes are exercised here; Fake-IP, IPv6, Verge service mode and Tailscale coexistence need separate validation.')
 }
 try {
@@ -629,6 +640,7 @@ try {
     $OutputDir = [System.IO.Path]::GetFullPath($OutputDir)
     [void](New-Item -ItemType Directory -Path $OutputDir -Force)
     if (-not (Test-Path $script:Helper)) { throw 'besttrace_gui.py is missing' }
+    if ($SkipLegacy -and $UseFixture) { throw '-SkipLegacy is only allowed for public-network comparisons' }
     if ($ScopeIcmpErrorsToInterface -and -not $AllowIcmpErrors) { throw '-ScopeIcmpErrorsToInterface requires -AllowIcmpErrors' }
     $summary.firewall = [ordered]@{
         profiles_before = @(Get-NetFirewallProfile | Select-Object Name, Enabled, DefaultInboundAction, DefaultOutboundAction)
@@ -703,7 +715,7 @@ try {
         $summary.status = $baseline.status
         $summary.reason = 'Baseline only: ' + $baseline.reason
     } else {
-        $legacy = Run-Scenario 'legacy-mixed' $selectedTarget $selectedExit 'mixed' $false
+        if (-not $SkipLegacy) { $legacy = Run-Scenario 'legacy-mixed' $selectedTarget $selectedExit 'mixed' $false }
         $mixed = Run-Scenario 'trace-mixed' $selectedTarget $selectedExit 'mixed' $true
         $gvisor = Run-Scenario 'trace-gvisor' $selectedTarget $selectedExit 'gvisor' $true
         $summary.selected_target = $selectedTarget

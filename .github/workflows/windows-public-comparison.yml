@@ -1,0 +1,106 @@
+name: Windows real public ICMP comparison
+
+on:
+  push:
+    branches: [codex/windows-public-comparison]
+  workflow_dispatch:
+    inputs:
+      tested_runid:
+        description: Run containing windows-tested-kernel with the pinned reviewed SHA256
+        required: false
+        default: '36913225840'
+        type: string
+
+permissions:
+  contents: read
+  actions: read
+
+concurrency:
+  group: windows-public-comparison-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  public-comparison:
+    runs-on: ${{ matrix.image }}
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        image: [windows-2022, windows-2025]
+        target: ['1.1.1.1', '8.8.8.8', '9.9.9.9', '223.5.5.5']
+    env:
+      PUBLIC_TARGET: ${{ matrix.target }}
+      PUBLIC_RUNNER_IMAGE: ${{ matrix.image }}
+      TESTED_RUN_ID: ${{ inputs.tested_runid || '36913225840' }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Download reviewed tested kernel without rebuilding
+        uses: actions/download-artifact@v4
+        with:
+          name: windows-tested-kernel
+          path: dist
+          github-token: ${{ github.token }}
+          run-id: ${{ env.TESTED_RUN_ID }}
+      - name: Verify kernel provenance and PowerShell syntax
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force evidence | Out-Null
+          $kernel = 'dist/mihomo-windows-amd64-icmp-trace-exp1.exe'
+          $hash = (Get-FileHash $kernel -Algorithm SHA256).Hash.ToLowerInvariant()
+          if ($hash -ne '6b01bb11de95bd51c10b7decb6a0c2a2ebe9f8d7147371a035b149bcc2d37383') { throw 'Tested kernel hash mismatch.' }
+          [ordered]@{ source_run_id = $env:TESTED_RUN_ID; sha256 = $hash; filename = $kernel } | ConvertTo-Json | Set-Content evidence/kernel-provenance.json
+          foreach ($script in @('scripts/windows/run_public_comparison.ps1', 'scripts/windows/run_validation.ps1')) {
+            $tokens = $null; $parseErrors = $null
+            [System.Management.Automation.Language.Parser]::ParseFile((Resolve-Path $script), [ref]$tokens, [ref]$parseErrors) | Out-Null
+            if ($parseErrors.Count -gt 0) { $parseErrors | Format-List; throw "PowerShell parser errors in $script" }
+          }
+      - name: Install GUI automation dependencies
+        run: python -m pip install pywinauto==0.6.9 pillow psutil
+      - name: Install pinned official BestTrace 3.9.6.6
+        shell: pwsh
+        run: |
+          $installer = Join-Path $env:RUNNER_TEMP 'besttrace-setup.exe'
+          $destination = Join-Path $env:RUNNER_TEMP 'besttrace-app'
+          Invoke-WebRequest 'https://cdn.ipip.net/17mon/besttrace.exe' -OutFile $installer
+          $hash = (Get-FileHash $installer -Algorithm SHA256).Hash.ToLowerInvariant()
+          if ($hash -ne '47f6787ec5b10a98b60f9d4fc2976d13791f49c223024197d38710f0327bd305') { throw 'Official BestTrace installer changed.' }
+          $install = Start-Process $installer -ArgumentList @('/VERYSILENT','/SUPPRESSMSGBOXES','/NORESTART',"/DIR=$destination") -PassThru -Wait
+          if ($install.ExitCode -ne 0) { throw "BestTrace installation failed: $($install.ExitCode)" }
+          $program = Get-ChildItem $destination -Filter 17monipdb.exe -Recurse | Select-Object -First 1
+          if (-not $program) { throw 'Installed BestTrace application not found.' }
+          "BESTTRACE_EXE=$($program.FullName)" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+          Get-FileHash $program.FullName -Algorithm SHA256 | Format-List | Out-File evidence/besttrace-hash.txt
+          $program.VersionInfo | Format-List FileVersion, ProductVersion | Out-File evidence/besttrace-version.txt
+      - name: Run real public OFF mixed and gvisor comparison
+        shell: pwsh
+        run: |
+          & scripts/windows/run_public_comparison.ps1 -KernelPath (Resolve-Path 'dist/mihomo-windows-amd64-icmp-trace-exp1.exe').Path -BestTracePath $env:BESTTRACE_EXE -Target $env:PUBLIC_TARGET -TestedRunId $env:TESTED_RUN_ID -OutputDir 'evidence'
+          $comparisonExit = $LASTEXITCODE
+          if ($comparisonExit -eq 2) {
+            Write-Host '::notice::Public comparison is inconclusive, not a pass. Evidence retains the actual all-star or incomplete baseline.'
+            exit 0
+          }
+          exit $comparisonExit
+      - name: Summarize public comparison without converting inconclusive to pass
+        if: always()
+        shell: pwsh
+        run: |
+          if (Test-Path 'evidence/comparison-summary.json') {
+            $result = Get-Content 'evidence/comparison-summary.json' -Raw | ConvertFrom-Json
+            $brief = [ordered]@{ status = $result.status; reason = $result.reason; target = $result.target; mode = $result.mode; firewall = $result.firewall; runner = $result.environment; scenarios = @($result.scenarios | Select-Object scenario, target, status, reason, tun_route_verified); limitations = $result.limitations } | ConvertTo-Json -Depth 12
+            Write-Host $brief
+            "## ${{ matrix.image }} / ${{ matrix.target }}: $($result.status)" | Out-File $env:GITHUB_STEP_SUMMARY -Append
+            '```json' | Out-File $env:GITHUB_STEP_SUMMARY -Append
+            $brief | Out-File $env:GITHUB_STEP_SUMMARY -Append
+            '```' | Out-File $env:GITHUB_STEP_SUMMARY -Append
+          }
+      - name: Upload screenshots logs packet captures and environment evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows-public-${{ matrix.image }}-${{ matrix.target }}
+          path: evidence/
+          retention-days: 7

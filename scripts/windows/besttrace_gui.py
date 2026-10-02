@@ -36,6 +36,7 @@ CONTROL_IDS = {
     "results": 1013,
     "clean": 1017,
     "vantage": 1057,
+    "max_hops": 1123,
 }
 
 
@@ -248,12 +249,16 @@ def main():
     parser.add_argument("--output-dir", required=True, type=Path)
     parser.add_argument("--timeout", default=90, type=float,
                         help="Seconds allowed for the actual trace after Start")
+    parser.add_argument("--max-hops", default=30, type=int,
+                        help="Requested hop limit; the actual selected native option is recorded")
     parser.add_argument("--browser-ready-timeout", default=45, type=float,
                         help="Bounded seconds to prepare each browser startup; one recovery is allowed")
     args = parser.parse_args()
     out = args.output_dir.resolve()
     out.mkdir(parents=True, exist_ok=True)
     result = {"status": "blocked", "reason": "Not run", "target": args.target,
+              "max_hops_requested": args.max_hops, "max_hops_actual": None,
+              "max_hops_available": [], "max_hops_verified": False,
               "exe": str(args.exe.resolve()), "trace_started": False,
               "trace_completed": False, "busy_observed": False,
               "target_observed": False, "rows": [], "hops": [],
@@ -362,6 +367,8 @@ def main():
         result["target"] = target
         if args.timeout <= 0 or args.browser_ready_timeout <= 0:
             raise ValueError("Both timeouts must be positive")
+        if not 1 <= args.max_hops <= 255:
+            raise ValueError("--max-hops must be between 1 and 255")
         if sys.platform != "win32":
             raise Blocked("This test requires actual Windows and the Windows BestTrace GUI")
         result.update(session_information())
@@ -547,6 +554,52 @@ def main():
         if tcp.get_check_state() != 0:
             raise Blocked("BestTrace TCP checkbox could not be disabled")
         result["probe_mode"] = "ICMP"
+
+        # This is a native dropdown list, not an editable text field. Verify
+        # its actual items and read back the selected option before claiming
+        # a hop budget. Some releases expose 30 but do not offer exactly 32.
+        hop_control = by_id(trace_window, CONTROL_IDS["max_hops"], "ComboBox")
+        if hop_control is None:
+            raise Blocked("Cannot identify BestTrace hop-limit dropdown 1123")
+        hop_items = hop_control.item_texts()
+        result["max_hops_requested"] = args.max_hops
+        result["max_hops_available"] = hop_items
+        numeric_items = {}
+        for item in hop_items:
+            match = re.fullmatch(r"\s*(\d+)\s*", item)
+            if match:
+                numeric_items[int(match.group(1))] = item
+        selected_limit = args.max_hops
+        if selected_limit not in numeric_items:
+            if 30 not in numeric_items:
+                raise Blocked(f"BestTrace does not offer hop limit {args.max_hops} or fallback 30: {hop_items!r}")
+            selected_limit = 30
+            result["max_hops_fallback"] = {
+                "reason": "Requested limit is absent from the native dropdown",
+                "requested": args.max_hops, "actual": selected_limit,
+            }
+        else:
+            result["max_hops_fallback"] = None
+        current_limit = safe(hop_control.selected_text, "") or safe(hop_control.window_text, "")
+        if current_limit.strip() != str(selected_limit):
+            run_for_settings = by_id(trace_window, CONTROL_IDS["run"], "Button")
+            busy_for_settings = {normalize(x) for x in ["Stop", "停止", "Stoping", "Stopping", "停止中"]}
+            if run_for_settings is not None and normalize(safe(run_for_settings.window_text, "")) in busy_for_settings:
+                result["stop_autostart_for_hop_limit"] = activate_button(run_for_settings)
+                settings_deadline = time.monotonic() + 15
+                while time.monotonic() < settings_deadline and normalize(
+                    safe(run_for_settings.window_text, "")) in busy_for_settings:
+                    time.sleep(0.1)
+                if normalize(safe(run_for_settings.window_text, "")) in busy_for_settings:
+                    raise Blocked("Could not stop the automatically started trace before changing its hop limit")
+            if not hop_control.is_enabled():
+                raise Blocked("BestTrace hop-limit dropdown is disabled")
+            hop_control.select(numeric_items[selected_limit])
+        actual_text = safe(hop_control.selected_text, "") or safe(hop_control.window_text, "")
+        if actual_text.strip() != str(selected_limit):
+            raise Blocked(f"BestTrace hop-limit readback mismatch: expected {selected_limit}, saw {actual_text!r}")
+        result["max_hops_actual"] = selected_limit
+        result["max_hops_verified"] = True
 
         combo = by_id(trace_window, CONTROL_IDS["trace_target"], "ComboBox")
         edits = [c for c in combo.descendants() if safe(c.class_name) == "Edit"]
