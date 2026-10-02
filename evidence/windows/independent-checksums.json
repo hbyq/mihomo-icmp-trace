@@ -1,0 +1,110 @@
+[
+  {
+    "scenario": "trace-mixed-203_0_113_77",
+    "correlated_error_count": 13,
+    "routers": [
+      "192.0.2.1",
+      "192.0.2.2"
+    ],
+    "record_route_echo_replies": [
+      {
+        "kind": "record_route_echo_reply",
+        "ihl": 60,
+        "ip_checksum_valid": true,
+        "icmp_checksum_valid": true,
+        "options_hex": "072718c0000201c0000202cb00714dc0000202c00002010000000000000000000000000000000000"
+      },
+      {
+        "kind": "record_route_echo_reply",
+        "ihl": 60,
+        "ip_checksum_valid": true,
+        "icmp_checksum_valid": true,
+        "options_hex": "072718c0000201c0000202cb00714dc0000202c00002010000000000000000000000000000000000"
+      }
+    ],
+    "checksum_failures": [],
+    "all_observed_checksums_valid": true,
+    "scope": "Complete outer IPv4/ICMP and quoted IPv4 checksums; truncated quoted ICMP checksum field matched to original, not mathematically recomputed"
+  },
+  {
+    "scenario": "trace-gvisor-203_0_113_77",
+    "correlated_error_count": 13,
+    "routers": [
+      "192.0.2.1",
+      "192.0.2.2"
+    ],
+    "record_route_echo_replies": [
+      {
+        "kind": "record_route_echo_reply",
+        "ihl": 60,
+        "ip_checksum_valid": true,
+        "icmp_checksum_valid": true,
+        "options_hex": "07271ccb00714dc0000201c0000202cb00714dc0000202c000020100000000000000000000000000"
+      },
+      {
+        "kind": "record_route_echo_reply",
+        "ihl": 60,
+        "ip_checksum_valid": true,
+        "icmp_checksum_valid": true,
+        "options_hex": "07271ccb00714dc0000201c0000202cb00714dc0000202c000020100000000000000000000000000"
+      }
+    ],
+    "checksum_failures": [],
+    "all_observed_checksums_valid": true,
+    "scope": "Complete outer IPv4/ICMP and quoted IPv4 checksums; truncated quoted ICMP checksum field matched to original, not mathematically recomputed"
+  },
+  {
+    "scenario": "trace-mixed-203_0_113_77",
+    "correlated_error_count": 13,
+    "routers": [
+      "192.0.2.1",
+      "192.0.2.2"
+    ],
+    "record_route_echo_replies": [
+      {
+        "kind": "record_route_echo_reply",
+        "ihl": 60,
+        "ip_checksum_valid": true,
+        "icmp_checksum_valid": true,
+        "options_hex": "072718c0000201c0000202cb00714dc0000202c00002010000000000000000000000000000000000"
+      },
+      {
+        "kind": "record_route_echo_reply",
+        "ihl": 60,
+        "ip_checksum_valid": true,
+        "icmp_checksum_valid": true,
+        "options_hex": "072718c0000201c0000202cb00714dc0000202c00002010000000000000000000000000000000000"
+      }
+    ],
+    "checksum_failures": [],
+    "all_observed_checksums_valid": true,
+    "scope": "Complete outer IPv4/ICMP and quoted IPv4 checksums; truncated quoted ICMP checksum field matched to original, not mathematically recomputed"
+  },
+  {
+    "scenario": "trace-gvisor-203_0_113_77",
+    "correlated_error_count": 13,
+    "routers": [
+      "192.0.2.1",
+      "192.0.2.2"
+    ],
+    "record_route_echo_replies": [
+      {
+        "kind": "record_route_echo_reply",
+        "ihl": 60,
+        "ip_checksum_valid": true,
+        "icmp_checksum_valid": true,
+        "options_hex": "07271ccb00714dc0000201c0000202cb00714dc0000202c000020100000000000000000000000000"
+      },
+      {
+        "kind": "record_route_echo_reply",
+        "ihl": 60,
+        "ip_checksum_valid": true,
+        "icmp_checksum_valid": true,
+        "options_hex": "07271ccb00714dc0000201c0000202cb00714dc0000202c000020100000000000000000000000000"
+      }
+    ],
+    "checksum_failures": [],
+    "all_observed_checksums_valid": true,
+    "scope": "Complete outer IPv4/ICMP and quoted IPv4 checksums; truncated quoted ICMP checksum field matched to original, not mathematically recomputed"
+  }
+]

@@ -1,0 +1,109 @@
+{
+  "workflow_run_id": 36913225840,
+  "case": "fixture-icmp-interface",
+  "target": "203.0.113.77",
+  "synthetic": true,
+  "purpose": "Explicitly compare TUN OFF and patched TUN ON on the same synthetic three-hop topology; not a public path.",
+  "off": {
+    "original_path": "baseline-203_0_113_77/besttrace/completed.png",
+    "rows": [
+      [
+        "1",
+        "192.0.2.1",
+        "5 / 15 / 15",
+        "Need a token for query location.",
+        "",
+        ""
+      ],
+      [
+        "2",
+        "192.0.2.2",
+        "5 / 15 / 15",
+        "Need a token for query location.",
+        "",
+        ""
+      ],
+      [
+        "3",
+        "203.0.113.77",
+        "5 / 15 / 15",
+        "Need a token for query location.",
+        "",
+        ""
+      ]
+    ],
+    "observed_addresses": [
+      "192.0.2.1",
+      "192.0.2.2",
+      "203.0.113.77"
+    ]
+  },
+  "mixed": {
+    "original_path": "trace-mixed-203_0_113_77/besttrace/completed.png",
+    "rows": [
+      [
+        "1",
+        "192.0.2.1",
+        "6 / 16 / 16",
+        "Need a token for query location.",
+        "",
+        ""
+      ],
+      [
+        "2",
+        "192.0.2.2",
+        "6 / 15 / 16",
+        "Need a token for query location.",
+        "",
+        ""
+      ],
+      [
+        "3",
+        "203.0.113.77",
+        "6 / 6 / 16",
+        "Need a token for query location.",
+        "",
+        ""
+      ]
+    ],
+    "observed_addresses": [
+      "192.0.2.1",
+      "192.0.2.2",
+      "203.0.113.77"
+    ]
+  },
+  "gvisor": {
+    "original_path": "trace-gvisor-203_0_113_77/besttrace/completed.png",
+    "rows": [
+      [
+        "1",
+        "192.0.2.1",
+        "16 / 16 / 21",
+        "Need a token for query location.",
+        "",
+        ""
+      ],
+      [
+        "2",
+        "192.0.2.2",
+        "15 / 15 / 16",
+        "Need a token for query location.",
+        "",
+        ""
+      ],
+      [
+        "3",
+        "203.0.113.77",
+        "15 / 15 / 16",
+        "Need a token for query location.",
+        "",
+        ""
+      ]
+    ],
+    "observed_addresses": [
+      "192.0.2.1",
+      "192.0.2.2",
+      "203.0.113.77"
+    ]
+  }
+}

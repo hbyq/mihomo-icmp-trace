@@ -3,3 +3,4 @@ dist/
 *.log
 *.pcap
 *.env
+__pycache__/

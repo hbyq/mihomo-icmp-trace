@@ -1,0 +1,25 @@
+{
+  "tested_commit": "836672fb5cdc160db448c590ee85bc2d144b0ae6",
+  "kernel_functional_commit": "d43daf536fb5f825d7ed0e4c7e7e8f52aefb27ed",
+  "workflow_run_id": 36913225840,
+  "workflow_url": "https://github.com/hbyq/mihomo-icmp-trace/actions/runs/36913225840",
+  "kernel": {
+    "file": "mihomo-windows-amd64-icmp-trace-exp1.exe",
+    "sha256": "6b01bb11de95bd51c10b7decb6a0c2a2ebe9f8d7147371a035b149bcc2d37383",
+    "bytes": 60306432,
+    "reported_version": "v1.19.31-icmp-trace-exp1",
+    "note": "Version label is unchanged from the earlier archive; use this SHA256 to identify the Windows RR fixes."
+  },
+  "source": {
+    "file": "mihomo-icmp-trace-windows-validated-source.zip",
+    "sha256": "9ff92a19edac16f3449059aba6a5bf066fc246652d507d17359991f72b655be2",
+    "bytes": 2926900,
+    "pinned_mihomo": "ab405bad5beeeac8b003bb01f60f134f6df54471",
+    "pinned_sing_tun": "b50ae28a1409c7bce8e96e6c6966cf57d8ace754",
+    "fresh_patch_checks": "forward/apply/reverse passed for both sources",
+    "source_file_manifest_sha256": "d758142a4079f5f832325b09bb95e7b748f20e77aaef86f8667a67693176ec34"
+  },
+  "scope": "Controlled Windows Server2022 IPv4 native/Wintun/BestTrace tests with explicit ICMP error rules",
+  "old_downloads_unchanged": true,
+  "artifacts_retention_days": 7
+}

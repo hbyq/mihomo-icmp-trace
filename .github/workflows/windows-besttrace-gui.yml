@@ -1,0 +1,64 @@
+name: Windows BestTrace cold-start diagnosis
+
+on:
+  workflow_dispatch:
+    inputs:
+      tested_run_id:
+        description: 'A recent Windows validation run containing windows-tested-kernel (artifacts expire after 7 days)'
+        required: true
+        default: '36913225840'
+        type: string
+
+permissions:
+  contents: read
+  actions: read
+
+concurrency:
+  group: windows-besttrace-gui-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  baseline:
+    runs-on: windows-2022
+    timeout-minutes: 10
+    strategy:
+      fail-fast: false
+      matrix:
+        reply-delay-ms: [0, 5]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - uses: actions/download-artifact@v4
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          run-id: ${{ inputs.tested_run_id }}
+          name: windows-tested-kernel
+          path: dist
+      - name: Install dependencies and official BestTrace
+        shell: pwsh
+        run: |
+          python -m pip install pywinauto==0.6.9 pillow psutil pydivert==2.1.0
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          $installer = Join-Path $env:RUNNER_TEMP 'besttrace-setup.exe'
+          $destination = Join-Path $env:RUNNER_TEMP 'besttrace-app'
+          Invoke-WebRequest 'https://cdn.ipip.net/17mon/besttrace.exe' -OutFile $installer
+          if ((Get-FileHash $installer -Algorithm SHA256).Hash.ToLowerInvariant() -ne '47f6787ec5b10a98b60f9d4fc2976d13791f49c223024197d38710f0327bd305') { throw 'BestTrace installer changed.' }
+          $install = Start-Process $installer -ArgumentList @('/VERYSILENT','/SUPPRESSMSGBOXES','/NORESTART',"/DIR=$destination") -PassThru -Wait
+          if ($install.ExitCode -ne 0) { throw 'BestTrace installation failed.' }
+          $program = Get-ChildItem $destination -Filter 17monipdb.exe -Recurse | Select-Object -First 1
+          if (-not $program) { throw 'BestTrace executable not found.' }
+          "BESTTRACE_EXE=$($program.FullName)" | Out-File $env:GITHUB_ENV -Append -Encoding utf8
+      - name: Run an actual cold BestTrace baseline without TUN
+        shell: pwsh
+        run: |
+          & scripts/windows/run_validation.ps1 -KernelPath (Resolve-Path 'dist/mihomo-windows-amd64-icmp-trace-exp1.exe').Path -BestTracePath $env:BESTTRACE_EXE -OutputDir 'evidence/runtime' -UseFixture -BaselineOnly -FixtureReplyDelayMs ${{ matrix.reply-delay-ms }}
+          exit $LASTEXITCODE
+      - name: Upload actual GUI diagnosis
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: besttrace-baseline-delay-${{ matrix.reply-delay-ms }}
+          path: evidence/
+          retention-days: 7

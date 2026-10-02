@@ -1,0 +1,179 @@
+name: Windows ICMP and BestTrace validation
+
+on:
+  push:
+    branches: [codex/windows-icmp-validation]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: windows-icmp-validation-v2-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  native-ip-options:
+    runs-on: windows-2022
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Inspect native Winsock IPv4 option set and reset
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force evidence | Out-Null
+          python scripts/windows/probe_ip_options.py | Tee-Object -FilePath evidence/ip-options.json
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - name: Upload native option evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows-native-ip-options
+          path: evidence/
+          retention-days: 7
+
+  build:
+    runs-on: windows-2022
+    timeout-minutes: 30
+    outputs:
+      kernel_built: ${{ steps.build.outputs.kernel_built }}
+    env:
+      CGO_ENABLED: '0'
+      GOTOOLCHAIN: local
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.27.1'
+          cache: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Build the patched kernel on Windows
+        id: build
+        shell: bash
+        run: |
+          mkdir -p evidence
+          go version > evidence/go-version.txt
+          git config --get core.autocrlf > evidence/git-line-endings.txt || true
+          sha256sum patches/*.patch > evidence/patch-hashes.txt
+          bash scripts/build.sh
+          echo "kernel_built=true" >> "$GITHUB_OUTPUT"
+      - name: Execute transport and configuration tests on Windows
+        shell: bash
+        run: |
+          set +e
+          (cd work/sing-tun && go test -count=1 -json ./ping -run '^TestTrace(Restore|RejectUnrelatedAndMalformed|Loopback|HopBudgetOnWire|RecordRoute(Validation|Restore|Loopback))$') > evidence/transport.jsonl 2>&1
+          transport_status=$?
+          (cd work/mihomo && go test -count=1 -json -tags with_gvisor ./config ./listener/config ./listener/sing_tun -run '^(TestICMPTrace|TestAsyncICMPTrace)') > evidence/configuration.jsonl 2>&1
+          configuration_status=$?
+          python scripts/windows/check_go_results.py --transport evidence/transport.jsonl --configuration evidence/configuration.jsonl --output evidence/go-results.json
+          result_status=$?
+          cat evidence/go-results.json
+          if [ "$transport_status" -ne 0 ] || [ "$configuration_status" -ne 0 ] || [ "$result_status" -ne 0 ]; then exit 1; fi
+      - name: Upload tested kernel
+        if: ${{ always() && steps.build.outputs.kernel_built == 'true' }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows-tested-kernel
+          path: dist/mihomo-windows-amd64-icmp-trace-exp1.exe
+          retention-days: 7
+      - name: Upload Windows unit test evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows-unit-evidence
+          path: evidence/
+          retention-days: 7
+
+  runtime:
+    needs: build
+    if: ${{ !cancelled() && needs.build.outputs.kernel_built == 'true' }}
+    runs-on: windows-2022
+    # Default-firewall behavior is diagnostic; both explicit-rule variants
+    # remain required and must satisfy full GUI/API/TUN-packet validation.
+    continue-on-error: ${{ matrix.mode == 'fixture' || matrix.mode == 'fixture-icmp-zero-delay' }}
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        mode: [public, fixture, fixture-icmp-allow, fixture-icmp-interface, fixture-icmp-zero-delay]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - uses: actions/download-artifact@v4
+        with:
+          name: windows-tested-kernel
+          path: dist
+      - name: Install Windows test dependencies
+        run: python -m pip install pywinauto==0.6.9 pillow psutil pydivert==2.1.0
+      - name: Check PowerShell syntax
+        shell: pwsh
+        run: |
+          $tokens = $null
+          $parseErrors = $null
+          [System.Management.Automation.Language.Parser]::ParseFile((Resolve-Path 'scripts/windows/run_validation.ps1'), [ref]$tokens, [ref]$parseErrors) | Out-Null
+          if ($parseErrors.Count -gt 0) { $parseErrors | Format-List; throw 'Windows validation script has parser errors.' }
+      - name: Install official Windows BestTrace
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force evidence | Out-Null
+          $installer = Join-Path $env:RUNNER_TEMP 'besttrace-setup.exe'
+          $destination = Join-Path $env:RUNNER_TEMP 'besttrace-app'
+          Invoke-WebRequest 'https://cdn.ipip.net/17mon/besttrace.exe' -OutFile $installer
+          $hash = (Get-FileHash $installer -Algorithm SHA256).Hash.ToLowerInvariant()
+          if ($hash -ne '47f6787ec5b10a98b60f9d4fc2976d13791f49c223024197d38710f0327bd305') { throw 'Official BestTrace installer changed; review it before running.' }
+          $install = Start-Process $installer -ArgumentList @('/VERYSILENT','/SUPPRESSMSGBOXES','/NORESTART',"/DIR=$destination") -PassThru -Wait
+          if ($install.ExitCode -ne 0) { throw "BestTrace installation failed: $($install.ExitCode)" }
+          $program = Get-ChildItem $destination -Filter 17monipdb.exe -Recurse | Select-Object -First 1
+          if (-not $program) { throw 'Installed BestTrace application not found.' }
+          "BESTTRACE_EXE=$($program.FullName)" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+          Get-FileHash $program.FullName -Algorithm SHA256 | Format-List | Out-File evidence/besttrace-hash.txt
+      - name: Run actual kernel and BestTrace
+        shell: pwsh
+        env:
+          VALIDATION_MODE: ${{ matrix.mode }}
+        run: |
+          $arguments = @{ KernelPath = (Resolve-Path 'dist/mihomo-windows-amd64-icmp-trace-exp1.exe').Path; BestTracePath = $env:BESTTRACE_EXE; OutputDir = 'evidence/runtime' }
+          if ($env:VALIDATION_MODE -like 'fixture*') { $arguments.UseFixture = $true }
+          if ($env:VALIDATION_MODE -in @('fixture-icmp-allow', 'fixture-icmp-interface', 'fixture-icmp-zero-delay')) { $arguments.AllowIcmpErrors = $true }
+          if ($env:VALIDATION_MODE -eq 'fixture-icmp-interface') { $arguments.ScopeIcmpErrorsToInterface = $true }
+          if ($env:VALIDATION_MODE -eq 'fixture-icmp-zero-delay') { $arguments.FixtureReplyDelayMs = 0 }
+          & scripts/windows/run_validation.ps1 @arguments
+          $validationExit = $LASTEXITCODE
+          if ($env:VALIDATION_MODE -eq 'public' -and $validationExit -eq 2) {
+            Write-Host '::notice::Public-network validation is inconclusive; see recorded baseline and summary. Controlled fixture results remain mandatory.'
+            exit 0
+          }
+          exit $validationExit
+      - name: Summarize actual results
+        if: always()
+        shell: pwsh
+        run: |
+          if (Test-Path 'evidence/runtime/summary.json') {
+            $result = Get-Content 'evidence/runtime/summary.json' -Raw | ConvertFrom-Json
+            $brief = [ordered]@{
+              status = $result.status
+              reason = $result.reason
+              mode = $result.mode
+              scenarios = @($result.scenarios | Select-Object scenario, target, status, reason, tun_route_verified, icmp_handler_log_seen)
+              limitations = $result.limitations
+            } | ConvertTo-Json -Depth 8
+            Write-Host $brief
+            "## Windows ${{ matrix.mode }} validation" | Out-File $env:GITHUB_STEP_SUMMARY -Append
+            '```json' | Out-File $env:GITHUB_STEP_SUMMARY -Append
+            $brief | Out-File $env:GITHUB_STEP_SUMMARY -Append
+            '```' | Out-File $env:GITHUB_STEP_SUMMARY -Append
+          }
+      - name: Upload Windows runtime evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows-runtime-${{ matrix.mode }}
+          path: evidence/
+          retention-days: 7

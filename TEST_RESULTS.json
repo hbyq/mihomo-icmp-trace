@@ -13,16 +13,71 @@
     "transport_race_tests": true,
     "async_race_tests": true,
     "configuration_tests": true,
-    "windows_amd64_cross_compile": true
+    "windows_amd64_cross_compile": true,
+    "windows_server2022_native_transport_and_config_no_skips": true,
+    "windows_server2022_ipv4_ipv6_real_loopback": true,
+    "windows_server2022_record_route_set_reset_and_restore": true,
+    "windows_server2022_controlled_ipv4_mixed_gvisor_tools_and_tun_errors": true
   },
   "not_yet_verified": [
-    "Windows runtime",
+    "Windows 10/11 desktop runtime",
+    "Real public Windows IPv4 multi-hop path (baseline does not respond in hosted environment)",
+    "Windows IPv6 TUN multi-hop runtime",
+    "Windows Fake-IP end-to-end",
     "Clash Verge service mode with Tailscale",
     "macOS runtime"
   ],
   "limitations": [
     "ICMP Echo probes only; not UDP/TCP traceroute",
-    "IPv4 options/fragments and IPv6 extension headers unsupported",
-    "Not a complete PMTU implementation"
-  ]
+    "IPv4 options other than Record Route with NOP/EOL padding, IP fragments and IPv6 extension headers unsupported",
+    "Not a complete PMTU implementation",
+    "Legacy downloads archives do not contain these Windows RR fixes; use the tested artifact or rebuild from the corresponding branch"
+  ],
+  "verification_provenance": {
+    "prior_linux_results_commit": "133e181ed2d136a83e3b42f09fc1f7283bf3982b",
+    "windows_tested_commit": "836672fb5cdc160db448c590ee85bc2d144b0ae6",
+    "windows_functional_changes_commit": "d43daf536fb5f825d7ed0e4c7e7e8f52aefb27ed",
+    "windows_run": "https://github.com/hbyq/mihomo-icmp-trace/actions/runs/36913225840",
+    "notes": "Original Linux end-to-end results are inherited evidence, not a rerun of all cases after the Windows RR changes. New RR parser/restoration race tests passed locally; native raw cases skipped locally without CAP_NET_RAW and are mandatory on Windows."
+  },
+  "windows_validation": {
+    "status": "pass_controlled_ipv4_with_explicit_icmp_error_rule",
+    "os": "Windows Server 2022 10.0.20348 Datacenter",
+    "go": "1.27.1",
+    "kernel": "v1.19.31-icmp-trace-exp1 with_gvisor",
+    "besttrace": "3.9.6.6 official Windows GUI, Native network, ICMP mode",
+    "path_kind": "WinDivert synthetic three-hop IPv4 replies after physical egress",
+    "expected_path": [
+      "192.0.2.1",
+      "192.0.2.2",
+      "203.0.113.77"
+    ],
+    "stack_modes": [
+      "mixed",
+      "gvisor"
+    ],
+    "required_evidence": [
+      "Completed BestTrace GUI with intermediate hops and target",
+      "Windows tracert and Ping API TTL checks",
+      "Independent original Wintun probe to restored ICMP error correlation from both routers",
+      "No ICMP setup/send failures",
+      "Native IPv4/IPv6 loopback, TTL/HopLimit, RR set/reset tests without skips"
+    ],
+    "icmp_forwarding": "DIRECT regardless of proxy routing rules; tun.icmp-trace defaults false",
+    "default_firewall": "Missing translated-ID Time Exceeded on RAW socket; endpoint Echo Reply can still work",
+    "explicit_firewall": "Physical DIRECT interface inbound ICMPv4 types 3/11/12 restores intermediate replies",
+    "record_route": "Validated IPv4 RR support; valid pointer with optlen=0 required to clear Winsock IP_OPTIONS",
+    "report": "WINDOWS_VALIDATION.md",
+    "evidence": "evidence/windows/validation.json",
+    "kernel_sha256": "6b01bb11de95bd51c10b7decb6a0c2a2ebe9f8d7147371a035b149bcc2d37383",
+    "zero_delay_full_pipeline": "pass",
+    "source_archive_scope": "Current pinned sources and patches, reconstructed separately; old repository downloads unchanged",
+    "workflow_conclusion": "success",
+    "required_global_and_interface_rule_variants": "pass, baseline plus mixed/gvisor",
+    "default_firewall_diagnostic": "expected missing middle hops; recorded fail, intentionally diagnostic",
+    "public_network": "inconclusive: no responding no-TUN baseline; CI accepts this as inconclusive, not verified",
+    "besttrace_cold_start": "One recorded first initialization blocked after45.016s, reopened ready3.515s, actual baseline then completed; no trace started before renderer ready",
+    "browser_reopen_branch_actually_tested": true,
+    "release_manifest": "evidence/windows/release-manifest.json"
+  }
 }

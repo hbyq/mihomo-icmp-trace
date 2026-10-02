@@ -19,7 +19,7 @@
 
 - 启用实验模式后，探测走本机 DIRECT 出口，真实目标能看到该出口地址。
 - Fake-IP 的域名会通过配置的 DNS 解析器恢复为真实地址；本地诊断日志会记录目标信息。
-- TUN/raw socket 运行需要系统相应权限。Windows 实机、服务模式及 Tailscale 共存测试待完成。
+- TUN/raw socket 运行需要系统相应权限。Windows Server 2022 VM 受控测试见 WINDOWS_VALIDATION.md；桌面、服务模式及 Tailscale 共存仍待验证。
 - 实验模式有有界启动队列和在途请求上限；不支持任意 ICMP/IP 报文和完整 PMTU 诊断。
 
 “未发现泄露项”仅描述本次发布检查结果，不代表能够证明软件不存在任何安全缺陷。

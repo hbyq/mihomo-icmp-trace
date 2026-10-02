@@ -436,7 +436,7 @@ index e97771c..48add0e 100644
  			log.Infoln("[ICMP] %s %s --> %s using fake ping echo", network, source, destination)
  			return nil, nil
 diff --git a/listener/sing_tun/server.go b/listener/sing_tun/server.go
-index 1e9527e..4dbe3fd 100644
+index 1e9527e..b0bc681 100644
 --- a/listener/sing_tun/server.go
 +++ b/listener/sing_tun/server.go
 @@ -73,6 +73,7 @@ type ListenerHandler struct {
@@ -465,3 +465,13 @@ index 1e9527e..4dbe3fd 100644
  	}
  	l = &Listener{
  		closed:  false,
+@@ -544,6 +549,9 @@ func New(options LC.Tun, tunnel C.Tunnel, additions ...inbound.Addition) (l *Lis
+ 	}
+ 	l.addrStr = fmt.Sprintf("%s(%s,%s), mtu: %d, auto route: %v, auto redir: %v, ip stack: %s",
+ 		tunName, tunOptions.Inet4Address, tunOptions.Inet6Address, tunMTU, options.AutoRoute, options.AutoRedirect, options.Stack)
++	if runtime.GOOS == "windows" && options.ICMPTrace {
++		log.Infoln("[TUN] Windows ICMP trace: if ping works but intermediate hops time out, check Windows Firewall inbound ICMPv4 Time Exceeded (11), Destination Unreachable (3), and Parameter Problem (12) rules")
++	}
+ 	return
+ }
+ 

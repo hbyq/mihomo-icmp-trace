@@ -1,16 +1,21 @@
 # Mihomo 1.19.31 ICMP trace 实验补丁
 
 测试目标：Clash Verge Rev 2.5.6 / Mihomo 1.19.31 / Windows x64。
-这是独立实验内核，不是 Mihomo 官方发布版。Windows 二进制已交叉编译；
-Windows 真机、Verge 服务模式和 Tailscale 同时运行时的验收尚未完成。
+这是独立实验内核，不是 Mihomo 官方发布版。已在 Windows Server 2022 虚拟机中实际运行
+Wintun、BestTrace、tracert 和 Windows Ping API；受控路径与验证边界见
+[Windows 验证记录](WINDOWS_VALIDATION.md)。Windows 10/11 桌面、Verge 服务模式与 Tailscale 共存仍待验收。
 
 ## 下载
+
+本轮 RR 与 Windows 兼容修复的构建见 [Windows 验证任务](https://github.com/hbyq/mihomo-icmp-trace/actions/workflows/windows-validation.yml)
+中的 `windows-tested-kernel` artifact（保留 7 天）。以下原始发布包尚未重新打包，不包含本轮修复。
 
 - [Windows x64 测试包](downloads/mihomo-windows-amd64-icmp-trace-exp1.zip)
 - [完整对应源码](downloads/mihomo-icmp-trace-exp1-source.zip)
 - [SHA-256 校验值](SHA256SUMS.txt)
 - [发布检查说明](SECURITY_REVIEW.md)
 - [测试结果摘要](TEST_RESULTS.json)
+- [Windows / BestTrace 实测与复现步骤](WINDOWS_VALIDATION.md)
 
 在 GitHub 文件页面选择下载原始文件，或使用说明末尾的直链。
 测试包内含实验内核、说明、版本清单与许可证。
@@ -28,11 +33,13 @@ Windows 真机、Verge 服务模式和 Tailscale 同时运行时的验收尚未�
 - 域名解析、socket 初始化和发送在后台处理，不阻塞 TUN 收包循环。
 - 初始化失败时关闭探测会话并记录日志，不回退为伪造的成功响应。
 - 支持配置重载；拒绝同时启用 `icmp-trace` 和 `disable-icmp-forwarding`。
+- 支持 BestTrace 的 IPv4 Record Route 辅助 Echo 请求；校验 RR 长度和指针，
+  串行设置并清除 socket options，按实际 IPv4 头长恢复回包。
 
 本次修复针对 **ICMP Echo 型 ping / Windows tracert / ICMP 模式的 MTR**。
 它仍经本机 DIRECT 出口发送，不通过普通代理节点转发 ICMP，也不是“不接管 ICMP”。
-macOS 默认 UDP traceroute、TCP traceroute、IPv6 扩展头、IPv4 IP options、
-分片的原始探测以及其他 ICMP 请求类型不在这个实验版本的支持范围。
+macOS 默认 UDP traceroute、TCP traceroute、IPv6 扩展头、除 Record Route 与 NOP/EOL 填充外的
+IPv4 options、分片的原始探测以及其他 ICMP 请求类型不在这个实验版本的支持范围。
 macOS 尚未做实际运行验证。
 本版本重点保留 TTL/Hop Limit，并未完整透传所有 IP 首部属性（例如 IPv4 DF/TOS）；
 不要把它当作已经验证过的完整 PMTU/任意原始 IP 数据包转发实现。
@@ -48,8 +55,14 @@ macOS 尚未做实际运行验证。
 - 完整 Mihomo 在三个隔离 Linux 网络命名空间中通过 16 项端到端测试：
   mixed / gvisor × IPv4 / IPv6 × 真实 IP / Fake-IP 域名 × 第一跳 / 终点。
   最初 IPv6 测试失败也出现在关闭 TUN 的基线中；等待邻居发现完成后，基线与全部测试通过。
-- 尚未完成 Windows 真机、Windows 防火墙、Clash Verge 服务模式与 Tailscale 共存验收。
-  以上结果证明实验实现可工作，不能替代 Windows 实机测试。
+- Windows Server 2022 受控 IPv4 路径已实际显示 BestTrace 三跳和延迟，并独立关联
+  TUN 中的原始探测与恢复回包。原生 IPv4/IPv6 loopback 以及 RR 设置/清除已在 Windows 执行；
+  完整 Windows 回归已通过（显式放行 ICMP 错误）；默认防火墙失败原因及未覆盖场景见 [验证记录](WINDOWS_VALIDATION.md)。
+- Windows Server 2022/2025 × 四个公网 IP 的 24 次 BestTrace 对照已完成；关闭/开启 TUN
+  均为 32 跳全超时，TCP 可通、物理出口 TTL 保留，但未收到 ICMP 回应，公网结果仍为不确定。
+  [查看全部原始对照截图与证据](WINDOWS_VALIDATION.md#2026-10-02真实公网多目标对照)。
+- Windows 10/11 桌面、真实公网完整路径、Windows IPv6 TUN/Fake-IP、
+  Clash Verge 服务模式与 Tailscale 共存尚未完成验收。
 
 ## 在 Windows 上试用
 
@@ -100,6 +113,11 @@ tracert -6 -d 2606:4700:4700::1111
 - 同时运行多个 trace，核对序号、重复回包、超时、CPU 和内存。
 - 分别在 Tailscale 开/关、Wi-Fi/有线切换、睡眠恢复后检查。
 - 若出现 `[ICMP TRACE] setup failed` 或 `send failed`，保留错误日志；失败不应显示模拟成功。
+- 若终点 ping 正常但中间跳全部超时，先与关闭 TUN 的基线对照，再检查物理 DIRECT 出口
+  的入站 ICMPv4 3/11/12。可使用 [可撤销的规则脚本](scripts/windows/set_icmp_trace_firewall.ps1)，
+  操作示例见 [Windows 验证记录](WINDOWS_VALIDATION.md)；内核不会自动更改防火墙。
+- BestTrace 使用“本机网络”和 ICMP 模式，取消 TCP 选项。IPIP token 提示影响地理信息查询，
+  受控测试中无需 token 即能显示路径及延迟。
 - 本补丁解析 Fake-IP 时会访问真实目标的 DIRECT 路径，符合这里的本机网络诊断用途。
 
 ## 回退

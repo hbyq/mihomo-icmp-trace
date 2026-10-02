@@ -1,0 +1,2612 @@
+{
+  "schema": 1,
+  "kernel_functional_commit": "d43daf536fb5f825d7ed0e4c7e7e8f52aefb27ed",
+  "kernel_tested_commit": "836672fb5cdc160db448c590ee85bc2d144b0ae6",
+  "kernel_sha256": "6b01bb11de95bd51c10b7decb6a0c2a2ebe9f8d7147371a035b149bcc2d37383",
+  "native_tests_run_id": 36913225840,
+  "final_gui_tested_commit": "836672fb5cdc160db448c590ee85bc2d144b0ae6",
+  "final_full_run_id": 36913225840,
+  "final_full_run_status": "success",
+  "os": "Windows Server 2022 10.0.20348 Datacenter",
+  "besttrace_version": "3.9.6.6",
+  "besttrace_installer_sha256": "47f6787ec5b10a98b60f9d4fc2976d13791f49c223024197d38710f0327bd305",
+  "mode": "Native network, ICMP, TCP unchecked",
+  "path": [
+    "192.0.2.1",
+    "192.0.2.2",
+    "203.0.113.77"
+  ],
+  "path_kind": "WinDivert synthetic replies after actual physical egress; not public-router validation",
+  "verified_kernel": {
+    "native_transport_and_config": "pass, no skips",
+    "ipv4_ipv6_loopback": "pass",
+    "record_route_set_clear_restore": "pass",
+    "ttl_and_hop_limit": "pass",
+    "zero_delay_complete_baseline_mixed_gvisor": "pass",
+    "five_ms_global_icmp_rule_mixed_gvisor": "pass, no setup/send failures",
+    "per_stack_correlated_errors": 13,
+    "per_stack_rr_echo_replies": 2,
+    "checksums": "Outer IPv4/ICMP and quoted IPv4 valid; truncated ICMP quote checksum field matched original"
+  },
+  "gui_cold_start": {
+    "original_failure": "Unready map renderer; access violation 0xC0000005 at RVA0x98f20, including no-TUN baseline with complete RR replies",
+    "guard": "Await actual renderer up to45s; never start unready; one recorded reopen allowed",
+    "independent_run_id": 36913225802,
+    "zero_ms": {
+      "status": "pass",
+      "first_ready_seconds": 7.297,
+      "reopened": false
+    },
+    "five_ms": {
+      "status": "pass",
+      "first_ready_seconds": 7.547,
+      "reopened": false
+    },
+    "reopen_branch_actually_tested": true,
+    "actual_recovery": {
+      "run_id": 36913225840,
+      "variant": "fixture-icmp-allow baseline",
+      "first_attempt": "blocked, no trace started",
+      "first_wait_seconds": 45.016,
+      "second_attempt": "ready then full completed three-hop GUI/API/tracert",
+      "second_wait_seconds": 3.515,
+      "first_failure_retained": true
+    }
+  },
+  "firewall_scope": "This hosted Windows default policy filters translated-ID RAW Time Exceeded; explicit tested recipe types3/11/12, fixture remoteIPs, ProgramAny, optionally physical interface. No universal necessity claim. Kernel does not automatically mutate firewall.",
+  "screenshots": {
+    "mixed": "besttrace-mixed.png",
+    "gvisor": "besttrace-gvisor.png",
+    "legacy": "besttrace-legacy.png",
+    "run_id": 36908531308,
+    "reply_delay_ms": 5
+  },
+  "not_verified": [
+    "Windows10/11 desktop",
+    "Real public Windows routed path",
+    "WindowsIPv6 TUN trace",
+    "WindowsFakeIP",
+    "Verge service",
+    "Tailscale coexistence",
+    "macOS runtime"
+  ],
+  "controlled_validation": "pass with explicit ICMP error rules; default-rule and public cases remain diagnostic/inconclusive",
+  "final_scenarios": {
+    "fixture-icmp-allow": {
+      "status": "pass",
+      "reason": "Actual Windows tools show R1/R2/target in both patched TUN stacks; captured error backwrites from both routers match the original Wintun probes, alongside physical-egress fixture evidence",
+      "scenarios": [
+        {
+          "scenario": "baseline",
+          "target": "203.0.113.77",
+          "status": "pass",
+          "reason": "Actual Windows BestTrace ICMP trace completed with target and intermediate hop(s)",
+          "tun_error_restoration": {
+            "required": false,
+            "passed": false,
+            "routers": [],
+            "reason": null
+          },
+          "gui": {
+            "status": "pass",
+            "trace_completed": true,
+            "browser_ready": true,
+            "preparation_recovered": true,
+            "rows": [
+              {
+                "index": 0,
+                "columns": [
+                  "1",
+                  "192.0.2.1",
+                  "15 / 15 / 18",
+                  "Need a token for query location.",
+                  "",
+                  ""
+                ],
+                "text": "1\t192.0.2.1\t15 / 15 / 18\tNeed a token for query location.\t\t"
+              },
+              {
+                "index": 1,
+                "columns": [
+                  "2",
+                  "192.0.2.2",
+                  "15 / 15 / 15",
+                  "Need a token for query location.",
+                  "",
+                  ""
+                ],
+                "text": "2\t192.0.2.2\t15 / 15 / 15\tNeed a token for query location.\t\t"
+              },
+              {
+                "index": 2,
+                "columns": [
+                  "3",
+                  "203.0.113.77",
+                  "15 / 15 / 15",
+                  "Need a token for query location.",
+                  "",
+                  ""
+                ],
+                "text": "3\t203.0.113.77\t15 / 15 / 15\tNeed a token for query location.\t\t"
+              }
+            ]
+          }
+        },
+        {
+          "scenario": "legacy-mixed",
+          "target": "203.0.113.77",
+          "status": "inconclusive",
+          "reason": "BestTrace completed but showed no responding intermediate hop",
+          "tun_error_restoration": {
+            "required": false,
+            "passed": false,
+            "routers": [],
+            "reason": null
+          },
+          "gui": {
+            "status": "inconclusive",
+            "trace_completed": true,
+            "browser_ready": true,
+            "preparation_recovered": false,
+            "rows": [
+              {
+                "index": 0,
+                "columns": [
+                  "1",
+                  "203.0.113.77",
+                  "6 / 15 / 22",
+                  "Need a token for query location.",
+                  "",
+                  ""
+                ],
+                "text": "1\t203.0.113.77\t6 / 15 / 22\tNeed a token for query location.\t\t"
+              }
+            ]
+          }
+        },
+        {
+          "scenario": "trace-mixed",
+          "target": "203.0.113.77",
+          "status": "pass",
+          "reason": "Actual Windows BestTrace ICMP trace completed with target and intermediate hop(s)",
+          "tun_error_restoration": {
+            "required": true,
+            "passed": true,
+            "routers": [
+              "192.0.2.1",
+              "192.0.2.2"
+            ],
+            "reason": "Time Exceeded from both fixture routers matches captured original Wintun probes by source, identifier, sequence and checksum"
+          },
+          "gui": {
+            "status": "pass",
+            "trace_completed": true,
+            "browser_ready": true,
+            "preparation_recovered": false,
+            "rows": [
+              {
+                "index": 0,
+                "columns": [
+                  "1",
+                  "192.0.2.1",
+                  "6 / 24 / 31",
+                  "Need a token for query location.",
+                  "",
+                  ""
+                ],
+                "text": "1\t192.0.2.1\t6 / 24 / 31\tNeed a token for query location.\t\t"
+              },
+              {
+                "index": 1,
+                "columns": [
+                  "2",
+                  "192.0.2.2",
+                  "6 / 16 / 48",
+                  "Need a token for query location.",
+                  "",
+                  ""
+                ],
+                "text": "2\t192.0.2.2\t6 / 16 / 48\tNeed a token for query location.\t\t"
+              },
+              {
+                "index": 2,
+                "columns": [
+                  "3",
+                  "203.0.113.77",
+                  "7 / 16 / 16",
+                  "Need a token for query location.",
+                  "",
+                  ""
+                ],
+                "text": "3\t203.0.113.77\t7 / 16 / 16\tNeed a token for query location.\t\t"
+              }
+            ]
+          }
+        },
+        {
+          "scenario": "trace-gvisor",
+          "target": "203.0.113.77",
+          "status": "pass",
+          "reason": "Actual Windows BestTrace ICMP trace completed with target and intermediate hop(s)",
+          "tun_error_restoration": {
+            "required": true,
+            "passed": true,
+            "routers": [
+              "192.0.2.1",
+              "192.0.2.2"
+            ],
+            "reason": "Time Exceeded from both fixture routers matches captured original Wintun probes by source, identifier, sequence and checksum"
+          },
+          "gui": {
+            "status": "pass",
+            "trace_completed": true,
+            "browser_ready": true,
+            "preparation_recovered": false,
+            "rows": [
+              {
+                "index": 0,
+                "columns": [
+                  "1",
+                  "192.0.2.1",
+                  "6 / 6 / 16",
+                  "Need a token for query location.",
+                  "",
+                  ""
+                ],
+                "text": "1\t192.0.2.1\t6 / 6 / 16\tNeed a token for query location.\t\t"
+              },
+              {
+                "index": 1,
+                "columns": [
+                  "2",
+                  "192.0.2.2",
+                  "16 / 16 / 17",
+                  "Need a token for query location.",
+                  "",
+                  ""
+                ],
+                "text": "2\t192.0.2.2\t16 / 16 / 17\tNeed a token for query location.\t\t"
+              },
+              {
+                "index": 2,
+                "columns": [
+                  "3",
+                  "203.0.113.77",
+                  "6 / 15 / 16",
+                  "Need a token for query location.",
+                  "",
+                  ""
+                ],
+                "text": "3\t203.0.113.77\t6 / 15 / 16\tNeed a token for query location.\t\t"
+              }
+            ]
+          }
+        }
+      ]
+    },
+    "fixture-icmp-interface": {
+      "status": "pass",
+      "reason": "Actual Windows tools show R1/R2/target in both patched TUN stacks; captured error backwrites from both routers match the original Wintun probes, alongside physical-egress fixture evidence",
+      "scenarios": [
+        {
+          "scenario": "baseline",
+          "target": "203.0.113.77",
+          "status": "pass",
+          "reason": "Actual Windows BestTrace ICMP trace completed with target and intermediate hop(s)",
+          "tun_error_restoration": {
+            "required": false,
+            "passed": false,
+            "routers": [],
+            "reason": null
+          },
+          "gui": {
+            "status": "pass",
+            "trace_completed": true,
+            "browser_ready": true,
+            "preparation_recovered": false,
+            "rows": [
+              {
+                "index": 0,
+                "columns": [
+                  "1",
+                  "192.0.2.1",
+                  "5 / 15 / 15",
+                  "Need a token for query location.",
+                  "",
+                  ""
+                ],
+                "text": "1\t192.0.2.1\t5 / 15 / 15\tNeed a token for query location.\t\t"
+              },
+              {
+                "index": 1,
+                "columns": [
+                  "2",
+                  "192.0.2.2",
+                  "5 / 15 / 15",
+                  "Need a token for query location.",
+                  "",
+                  ""
+                ],
+                "text": "2\t192.0.2.2\t5 / 15 / 15\tNeed a token for query location.\t\t"
+              },
+              {
+                "index": 2,
+                "columns": [
+                  "3",
+                  "203.0.113.77",
+                  "5 / 15 / 15",
+                  "Need a token for query location.",
+                  "",
+                  ""
+                ],
+                "text": "3\t203.0.113.77\t5 / 15 / 15\tNeed a token for query location.\t\t"
+              }
+            ]
+          }
+        },
+        {
+          "scenario": "legacy-mixed",
+          "target": "203.0.113.77",
+          "status": "inconclusive",
+          "reason": "BestTrace completed but showed no responding intermediate hop",
+          "tun_error_restoration": {
+            "required": false,
+            "passed": false,
+            "routers": [],
+            "reason": null
+          },
+          "gui": {
+            "status": "inconclusive",
+            "trace_completed": true,
+            "browser_ready": true,
+            "preparation_recovered": false,
+            "rows": [
+              {
+                "index": 0,
+                "columns": [
+                  "1",
+                  "203.0.113.77",
+                  "16 / 16 / 17",
+                  "Need a token for query location.",
+                  "",
+                  ""
+                ],
+                "text": "1\t203.0.113.77\t16 / 16 / 17\tNeed a token for query location.\t\t"
+              }
+            ]
+          }
+        },
+        {
+          "scenario": "trace-mixed",
+          "target": "203.0.113.77",
+          "status": "pass",
+          "reason": "Actual Windows BestTrace ICMP trace completed with target and intermediate hop(s)",
+          "tun_error_restoration": {
+            "required": true,
+            "passed": true,
+            "routers": [
+              "192.0.2.1",
+              "192.0.2.2"
+            ],
+            "reason": "Time Exceeded from both fixture routers matches captured original Wintun probes by source, identifier, sequence and checksum"
+          },
+          "gui": {
+            "status": "pass",
+            "trace_completed": true,
+            "browser_ready": true,
+            "preparation_recovered": false,
+            "rows": [
+              {
+                "index": 0,
+                "columns": [
+                  "1",
+                  "192.0.2.1",
+                  "6 / 16 / 16",
+                  "Need a token for query location.",
+                  "",
+                  ""
+                ],
+                "text": "1\t192.0.2.1\t6 / 16 / 16\tNeed a token for query location.\t\t"
+              },
+              {
+                "index": 1,
+                "columns": [
+                  "2",
+                  "192.0.2.2",
+                  "6 / 15 / 16",
+                  "Need a token for query location.",
+                  "",
+                  ""
+                ],
+                "text": "2\t192.0.2.2\t6 / 15 / 16\tNeed a token for query location.\t\t"
+              },
+              {
+                "index": 2,
+                "columns": [
+                  "3",
+                  "203.0.113.77",
+                  "6 / 6 / 16",
+                  "Need a token for query location.",
+                  "",
+                  ""
+                ],
+                "text": "3\t203.0.113.77\t6 / 6 / 16\tNeed a token for query location.\t\t"
+              }
+            ]
+          }
+        },
+        {
+          "scenario": "trace-gvisor",
+          "target": "203.0.113.77",
+          "status": "pass",
+          "reason": "Actual Windows BestTrace ICMP trace completed with target and intermediate hop(s)",
+          "tun_error_restoration": {
+            "required": true,
+            "passed": true,
+            "routers": [
+              "192.0.2.1",
+              "192.0.2.2"
+            ],
+            "reason": "Time Exceeded from both fixture routers matches captured original Wintun probes by source, identifier, sequence and checksum"
+          },
+          "gui": {
+            "status": "pass",
+            "trace_completed": true,
+            "browser_ready": true,
+            "preparation_recovered": false,
+            "rows": [
+              {
+                "index": 0,
+                "columns": [
+                  "1",
+                  "192.0.2.1",
+                  "16 / 16 / 21",
+                  "Need a token for query location.",
+                  "",
+                  ""
+                ],
+                "text": "1\t192.0.2.1\t16 / 16 / 21\tNeed a token for query location.\t\t"
+              },
+              {
+                "index": 1,
+                "columns": [
+                  "2",
+                  "192.0.2.2",
+                  "15 / 15 / 16",
+                  "Need a token for query location.",
+                  "",
+                  ""
+                ],
+                "text": "2\t192.0.2.2\t15 / 15 / 16\tNeed a token for query location.\t\t"
+              },
+              {
+                "index": 2,
+                "columns": [
+                  "3",
+                  "203.0.113.77",
+                  "15 / 15 / 16",
+                  "Need a token for query location.",
+                  "",
+                  ""
+                ],
+                "text": "3\t203.0.113.77\t15 / 15 / 16\tNeed a token for query location.\t\t"
+              }
+            ]
+          }
+        }
+      ]
+    },
+    "fixture": {
+      "status": "fail",
+      "reason": "BestTrace sees intermediate hops without TUN, but a patched TUN scenario does not",
+      "scenarios": [
+        {
+          "scenario": "baseline",
+          "target": "203.0.113.77",
+          "status": "pass",
+          "reason": "Actual Windows BestTrace ICMP trace completed with target and intermediate hop(s)",
+          "tun_error_restoration": {
+            "required": false,
+            "passed": false,
+            "routers": [],
+            "reason": null
+          },
+          "gui": {
+            "status": "pass",
+            "trace_completed": true,
+            "browser_ready": true,
+            "preparation_recovered": false,
+            "rows": [
+              {
+                "index": 0,
+                "columns": [
+                  "1",
+                  "192.0.2.1",
+                  "6 / 9 / 15",
+                  "Need a token for query location.",
+                  "",
+                  ""
+                ],
+                "text": "1\t192.0.2.1\t6 / 9 / 15\tNeed a token for query location.\t\t"
+              },
+              {
+                "index": 1,
+                "columns": [
+                  "2",
+                  "192.0.2.2",
+                  "5 / 15 / 15",
+                  "Need a token for query location.",
+                  "",
+                  ""
+                ],
+                "text": "2\t192.0.2.2\t5 / 15 / 15\tNeed a token for query location.\t\t"
+              },
+              {
+                "index": 2,
+                "columns": [
+                  "3",
+                  "203.0.113.77",
+                  "9 / 15 / 15",
+                  "Need a token for query location.",
+                  "",
+                  ""
+                ],
+                "text": "3\t203.0.113.77\t9 / 15 / 15\tNeed a token for query location.\t\t"
+              }
+            ]
+          }
+        },
+        {
+          "scenario": "legacy-mixed",
+          "target": "203.0.113.77",
+          "status": "inconclusive",
+          "reason": "BestTrace completed but showed no responding intermediate hop",
+          "tun_error_restoration": {
+            "required": false,
+            "passed": false,
+            "routers": [],
+            "reason": null
+          },
+          "gui": {
+            "status": "inconclusive",
+            "trace_completed": true,
+            "browser_ready": true,
+            "preparation_recovered": false,
+            "rows": [
+              {
+                "index": 0,
+                "columns": [
+                  "1",
+                  "203.0.113.77",
+                  "6 / 7 / 7",
+                  "Need a token for query location.",
+                  "",
+                  ""
+                ],
+                "text": "1\t203.0.113.77\t6 / 7 / 7\tNeed a token for query location.\t\t"
+              }
+            ]
+          }
+        },
+        {
+          "scenario": "trace-mixed",
+          "target": "203.0.113.77",
+          "status": "inconclusive",
+          "reason": "BestTrace completed but showed no responding intermediate hop",
+          "tun_error_restoration": {
+            "required": true,
+            "passed": false,
+            "routers": [],
+            "reason": "Independent capture does not show correlated Time Exceeded backwrites through Wintun from both fixture routers"
+          },
+          "gui": {
+            "status": "inconclusive",
+            "trace_completed": true,
+            "browser_ready": true,
+            "preparation_recovered": false,
+            "rows": [
+              {
+                "index": 0,
+                "columns": [
+                  "1",
+                  "*",
+                  "* / * / *",
+                  "",
+                  "",
+                  ""
+                ],
+                "text": "1\t*\t* / * / *\t\t\t"
+              },
+              {
+                "index": 1,
+                "columns": [
+                  "2",
+                  "*",
+                  "* / * / *",
+                  "",
+                  "",
+                  ""
+                ],
+                "text": "2\t*\t* / * / *\t\t\t"
+              },
+              {
+                "index": 2,
+                "columns": [
+                  "3",
+                  "203.0.113.77",
+                  "6 / 17 / 30",
+                  "Need a token for query location.",
+                  "",
+                  ""
+                ],
+                "text": "3\t203.0.113.77\t6 / 17 / 30\tNeed a token for query location.\t\t"
+              }
+            ]
+          }
+        },
+        {
+          "scenario": "trace-gvisor",
+          "target": "203.0.113.77",
+          "status": "inconclusive",
+          "reason": "BestTrace completed but showed no responding intermediate hop",
+          "tun_error_restoration": {
+            "required": true,
+            "passed": false,
+            "routers": [],
+            "reason": "Independent capture does not show correlated Time Exceeded backwrites through Wintun from both fixture routers"
+          },
+          "gui": {
+            "status": "inconclusive",
+            "trace_completed": true,
+            "browser_ready": true,
+            "preparation_recovered": false,
+            "rows": [
+              {
+                "index": 0,
+                "columns": [
+                  "1",
+                  "*",
+                  "* / * / *",
+                  "",
+                  "",
+                  ""
+                ],
+                "text": "1\t*\t* / * / *\t\t\t"
+              },
+              {
+                "index": 1,
+                "columns": [
+                  "2",
+                  "*",
+                  "* / * / *",
+                  "",
+                  "",
+                  ""
+                ],
+                "text": "2\t*\t* / * / *\t\t\t"
+              },
+              {
+                "index": 2,
+                "columns": [
+                  "3",
+                  "203.0.113.77",
+                  "16 / 16 / 16",
+                  "Need a token for query location.",
+                  "",
+                  ""
+                ],
+                "text": "3\t203.0.113.77\t16 / 16 / 16\tNeed a token for query location.\t\t"
+              }
+            ]
+          }
+        }
+      ]
+    },
+    "public": {
+      "status": "inconclusive",
+      "reason": "BestTrace without TUN has no usable intermediate-hop baseline on this Windows network",
+      "scenarios": [
+        {
+          "scenario": "baseline",
+          "target": "1.1.1.1",
+          "status": "inconclusive",
+          "reason": "BestTrace completed without a responding target",
+          "tun_error_restoration": {
+            "required": false,
+            "passed": false,
+            "routers": [],
+            "reason": null
+          },
+          "gui": {
+            "status": "inconclusive",
+            "trace_completed": true,
+            "browser_ready": true,
+            "preparation_recovered": false,
+            "rows": [
+              {
+                "index": 0,
+                "columns": [
+                  "1",
+                  "*",
+                  "* / * / *",
+                  "",
+                  "",
+                  ""
+                ],
+                "text": "1\t*\t* / * / *\t\t\t"
+              },
+              {
+                "index": 1,
+                "columns": [
+                  "2",
+                  "*",
+                  "* / * / *",
+                  "",
+                  "",
+                  ""
+                ],
+                "text": "2\t*\t* / * / *\t\t\t"
+              },
+              {
+                "index": 2,
+                "columns": [
+                  "3",
+                  "*",
+                  "* / * / *",
+                  "",
+                  "",
+                  ""
+                ],
+                "text": "3\t*\t* / * / *\t\t\t"
+              },
+              {
+                "index": 3,
+                "columns": [
+                  "4",
+                  "*",
+                  "* / * / *",
+                  "",
+                  "",
+                  ""
+                ],
+                "text": "4\t*\t* / * / *\t\t\t"
+              },
+              {
+                "index": 4,
+                "columns": [
+                  "5",
+                  "*",
+                  "* / * / *",
+                  "",
+                  "",
+                  ""
+                ],
+                "text": "5\t*\t* / * / *\t\t\t"
+              },
+              {
+                "index": 5,
+                "columns": [
+                  "6",
+                  "*",
+                  "* / * / *",
+                  "",
+                  "",
+                  ""
+                ],
+                "text": "6\t*\t* / * / *\t\t\t"
+              },
+              {
+                "index": 6,
+                "columns": [
+                  "7",
+                  "*",
+                  "* / * / *",
+                  "",
+                  "",
+                  ""
+                ],
+                "text": "7\t*\t* / * / *\t\t\t"
+              },
+              {
+                "index": 7,
+                "columns": [
+                  "8",
+                  "*",
+                  "* / * / *",
+                  "",
+                  "",
+                  ""
+                ],
+                "text": "8\t*\t* / * / *\t\t\t"
+              },
+              {
+                "index": 8,
+                "columns": [
+                  "9",
+                  "*",
+                  "* / * / *",
+                  "",
+                  "",
+                  ""
+                ],
+                "text": "9\t*\t* / * / *\t\t\t"
+              },
+              {
+                "index": 9,
+                "columns": [
+                  "10",
+                  "*",
+                  "* / * / *",
+                  "",
+                  "",
+                  ""
+                ],
+                "text": "10\t*\t* / * / *\t\t\t"
+              },
+              {
+                "index": 10,
+                "columns": [
+                  "11",
+                  "*",
+                  "* / * / *",
+                  "",
+                  "",
+                  ""
+                ],
+                "text": "11\t*\t* / * / *\t\t\t"
+              },
+              {
+                "index": 11,
+                "columns": [
+                  "12",
+                  "*",
+                  "* / * / *",
+                  "",
+                  "",
+                  ""
+                ],
+                "text": "12\t*\t* / * / *\t\t\t"
+              },
+              {
+                "index": 12,
+                "columns": [
+                  "13",
+                  "*",
+                  "* / * / *",
+                  "",
+                  "",
+                  ""
+                ],
+                "text": "13\t*\t* / * / *\t\t\t"
+              },
+              {
+                "index": 13,
+                "columns": [
+                  "14",
+                  "*",
+                  "* / * / *",
+                  "",
+                  "",
+                  ""
+                ],
+                "text": "14\t*\t* / * / *\t\t\t"
+              },
+              {
+                "index": 14,
+                "columns": [
+                  "15",
+                  "*",
+                  "* / * / *",
+                  "",
+                  "",
+                  ""
+                ],
+                "text": "15\t*\t* / * / *\t\t\t"
+              },
+              {
+                "index": 15,
+                "columns": [
+                  "16",
+                  "*",
+                  "* / * / *",
+                  "",
+                  "",
+                  ""
+                ],
+                "text": "16\t*\t* / * / *\t\t\t"
+              },
+              {
+                "index": 16,
+                "columns": [
+                  "17",
+                  "*",
+                  "* / * / *",
+                  "",
+                  "",
+                  ""
+                ],
+                "text": "17\t*\t* / * / *\t\t\t"
+              },
+              {
+                "index": 17,
+                "columns": [
+                  "18",
+                  "*",
+                  "* / * / *",
+                  "",
+                  "",
+                  ""
+                ],
+                "text": "18\t*\t* / * / *\t\t\t"
+              },
+              {
+                "index": 18,
+                "columns": [
+                  "19",
+                  "*",
+                  "* / * / *",
+                  "",
+                  "",
+                  ""
+                ],
+                "text": "19\t*\t* / * / *\t\t\t"
+              },
+              {
+                "index": 19,
+                "columns": [
+                  "20",
+                  "*",
+                  "* / * / *",
+                  "",
+                  "",
+                  ""
+                ],
+                "text": "20\t*\t* / * / *\t\t\t"
+              },
+              {
+                "index": 20,
+                "columns": [
+                  "21",
+                  "*",
+                  "* / * / *",
+                  "",
+                  "",
+                  ""
+                ],
+                "text": "21\t*\t* / * / *\t\t\t"
+              },
+              {
+                "index": 21,
+                "columns": [
+                  "22",
+                  "*",
+                  "* / * / *",
+                  "",
+                  "",
+                  ""
+                ],
+                "text": "22\t*\t* / * / *\t\t\t"
+              },
+              {
+                "index": 22,
+                "columns": [
+                  "23",
+                  "*",
+                  "* / * / *",
+                  "",
+                  "",
+                  ""
+                ],
+                "text": "23\t*\t* / * / *\t\t\t"
+              },
+              {
+                "index": 23,
+                "columns": [
+                  "24",
+                  "*",
+                  "* / * / *",
+                  "",
+                  "",
+                  ""
+                ],
+                "text": "24\t*\t* / * / *\t\t\t"
+              },
+              {
+                "index": 24,
+                "columns": [
+                  "25",
+                  "*",
+                  "* / * / *",
+                  "",
+                  "",
+                  ""
+                ],
+                "text": "25\t*\t* / * / *\t\t\t"
+              },
+              {
+                "index": 25,
+                "columns": [
+                  "26",
+                  "*",
+                  "* / * / *",
+                  "",
+                  "",
+                  ""
+                ],
+                "text": "26\t*\t* / * / *\t\t\t"
+              },
+              {
+                "index": 26,
+                "columns": [
+                  "27",
+                  "*",
+                  "* / * / *",
+                  "",
+                  "",
+                  ""
+                ],
+                "text": "27\t*\t* / * / *\t\t\t"
+              },
+              {
+                "index": 27,
+                "columns": [
+                  "28",
+                  "*",
+                  "* / * / *",
+                  "",
+                  "",
+                  ""
+                ],
+                "text": "28\t*\t* / * / *\t\t\t"
+              },
+              {
+                "index": 28,
+                "columns": [
+                  "29",
+                  "*",
+                  "* / * / *",
+                  "",
+                  "",
+                  ""
+                ],
+                "text": "29\t*\t* / * / *\t\t\t"
+              },
+              {
+                "index": 29,
+                "columns": [
+                  "30",
+                  "*",
+                  "* / * / *",
+                  "",
+                  "",
+                  ""
+                ],
+                "text": "30\t*\t* / * / *\t\t\t"
+              }
+            ]
+          }
+        },
+        {
+          "scenario": "baseline",
+          "target": "8.8.8.8",
+          "status": "inconclusive",
+          "reason": "BestTrace completed without a responding target",
+          "tun_error_restoration": {
+            "required": false,
+            "passed": false,
+            "routers": [],
+            "reason": null
+          },
+          "gui": {
+            "status": "inconclusive",
+            "trace_completed": true,
+            "browser_ready": true,
+            "preparation_recovered": false,
+            "rows": [
+              {
+                "index": 0,
+                "columns": [
+                  "1",
+                  "*",
+                  "* / * / *",
+                  "",
+                  "",
+                  ""
+                ],
+                "text": "1\t*\t* / * / *\t\t\t"
+              },
+              {
+                "index": 1,
+                "columns": [
+                  "2",
+                  "*",
+                  "* / * / *",
+                  "",
+                  "",
+                  ""
+                ],
+                "text": "2\t*\t* / * / *\t\t\t"
+              },
+              {
+                "index": 2,
+                "columns": [
+                  "3",
+                  "*",
+                  "* / * / *",
+                  "",
+                  "",
+                  ""
+                ],
+                "text": "3\t*\t* / * / *\t\t\t"
+              },
+              {
+                "index": 3,
+                "columns": [
+                  "4",
+                  "*",
+                  "* / * / *",
+                  "",
+                  "",
+                  ""
+                ],
+                "text": "4\t*\t* / * / *\t\t\t"
+              },
+              {
+                "index": 4,
+                "columns": [
+                  "5",
+                  "*",
+                  "* / * / *",
+                  "",
+                  "",
+                  ""
+                ],
+                "text": "5\t*\t* / * / *\t\t\t"
+              },
+              {
+                "index": 5,
+                "columns": [
+                  "6",
+                  "*",
+                  "* / * / *",
+                  "",
+                  "",
+                  ""
+                ],
+                "text": "6\t*\t* / * / *\t\t\t"
+              },
+              {
+                "index": 6,
+                "columns": [
+                  "7",
+                  "*",
+                  "* / * / *",
+                  "",
+                  "",
+                  ""
+                ],
+                "text": "7\t*\t* / * / *\t\t\t"
+              },
+              {
+                "index": 7,
+                "columns": [
+                  "8",
+                  "*",
+                  "* / * / *",
+                  "",
+                  "",
+                  ""
+                ],
+                "text": "8\t*\t* / * / *\t\t\t"
+              },
+              {
+                "index": 8,
+                "columns": [
+                  "9",
+                  "*",
+                  "* / * / *",
+                  "",
+                  "",
+                  ""
+                ],
+                "text": "9\t*\t* / * / *\t\t\t"
+              },
+              {
+                "index": 9,
+                "columns": [
+                  "10",
+                  "*",
+                  "* / * / *",
+                  "",
+                  "",
+                  ""
+                ],
+                "text": "10\t*\t* / * / *\t\t\t"
+              },
+              {
+                "index": 10,
+                "columns": [
+                  "11",
+                  "*",
+                  "* / * / *",
+                  "",
+                  "",
+                  ""
+                ],
+                "text": "11\t*\t* / * / *\t\t\t"
+              },
+              {
+                "index": 11,
+                "columns": [
+                  "12",
+                  "*",
+                  "* / * / *",
+                  "",
+                  "",
+                  ""
+                ],
+                "text": "12\t*\t* / * / *\t\t\t"
+              },
+              {
+                "index": 12,
+                "columns": [
+                  "13",
+                  "*",
+                  "* / * / *",
+                  "",
+                  "",
+                  ""
+                ],
+                "text": "13\t*\t* / * / *\t\t\t"
+              },
+              {
+                "index": 13,
+                "columns": [
+                  "14",
+                  "*",
+                  "* / * / *",
+                  "",
+                  "",
+                  ""
+                ],
+                "text": "14\t*\t* / * / *\t\t\t"
+              },
+              {
+                "index": 14,
+                "columns": [
+                  "15",
+                  "*",
+                  "* / * / *",
+                  "",
+                  "",
+                  ""
+                ],
+                "text": "15\t*\t* / * / *\t\t\t"
+              },
+              {
+                "index": 15,
+                "columns": [
+                  "16",
+                  "*",
+                  "* / * / *",
+                  "",
+                  "",
+                  ""
+                ],
+                "text": "16\t*\t* / * / *\t\t\t"
+              },
+              {
+                "index": 16,
+                "columns": [
+                  "17",
+                  "*",
+                  "* / * / *",
+                  "",
+                  "",
+                  ""
+                ],
+                "text": "17\t*\t* / * / *\t\t\t"
+              },
+              {
+                "index": 17,
+                "columns": [
+                  "18",
+                  "*",
+                  "* / * / *",
+                  "",
+                  "",
+                  ""
+                ],
+                "text": "18\t*\t* / * / *\t\t\t"
+              },
+              {
+                "index": 18,
+                "columns": [
+                  "19",
+                  "*",
+                  "* / * / *",
+                  "",
+                  "",
+                  ""
+                ],
+                "text": "19\t*\t* / * / *\t\t\t"
+              },
+              {
+                "index": 19,
+                "columns": [
+                  "20",
+                  "*",
+                  "* / * / *",
+                  "",
+                  "",
+                  ""
+                ],
+                "text": "20\t*\t* / * / *\t\t\t"
+              },
+              {
+                "index": 20,
+                "columns": [
+                  "21",
+                  "*",
+                  "* / * / *",
+                  "",
+                  "",
+                  ""
+                ],
+                "text": "21\t*\t* / * / *\t\t\t"
+              },
+              {
+                "index": 21,
+                "columns": [
+                  "22",
+                  "*",
+                  "* / * / *",
+                  "",
+                  "",
+                  ""
+                ],
+                "text": "22\t*\t* / * / *\t\t\t"
+              },
+              {
+                "index": 22,
+                "columns": [
+                  "23",
+                  "*",
+                  "* / * / *",
+                  "",
+                  "",
+                  ""
+                ],
+                "text": "23\t*\t* / * / *\t\t\t"
+              },
+              {
+                "index": 23,
+                "columns": [
+                  "24",
+                  "*",
+                  "* / * / *",
+                  "",
+                  "",
+                  ""
+                ],
+                "text": "24\t*\t* / * / *\t\t\t"
+              },
+              {
+                "index": 24,
+                "columns": [
+                  "25",
+                  "*",
+                  "* / * / *",
+                  "",
+                  "",
+                  ""
+                ],
+                "text": "25\t*\t* / * / *\t\t\t"
+              },
+              {
+                "index": 25,
+                "columns": [
+                  "26",
+                  "*",
+                  "* / * / *",
+                  "",
+                  "",
+                  ""
+                ],
+                "text": "26\t*\t* / * / *\t\t\t"
+              },
+              {
+                "index": 26,
+                "columns": [
+                  "27",
+                  "*",
+                  "* / * / *",
+                  "",
+                  "",
+                  ""
+                ],
+                "text": "27\t*\t* / * / *\t\t\t"
+              },
+              {
+                "index": 27,
+                "columns": [
+                  "28",
+                  "*",
+                  "* / * / *",
+                  "",
+                  "",
+                  ""
+                ],
+                "text": "28\t*\t* / * / *\t\t\t"
+              },
+              {
+                "index": 28,
+                "columns": [
+                  "29",
+                  "*",
+                  "* / * / *",
+                  "",
+                  "",
+                  ""
+                ],
+                "text": "29\t*\t* / * / *\t\t\t"
+              },
+              {
+                "index": 29,
+                "columns": [
+                  "30",
+                  "*",
+                  "* / * / *",
+                  "",
+                  "",
+                  ""
+                ],
+                "text": "30\t*\t* / * / *\t\t\t"
+              }
+            ]
+          }
+        },
+        {
+          "scenario": "legacy-mixed",
+          "target": "1.1.1.1",
+          "status": "inconclusive",
+          "reason": "BestTrace completed without a responding target",
+          "tun_error_restoration": {
+            "required": false,
+            "passed": false,
+            "routers": [],
+            "reason": null
+          },
+          "gui": {
+            "status": "inconclusive",
+            "trace_completed": true,
+            "browser_ready": true,
+            "preparation_recovered": false,
+            "rows": [
+              {
+                "index": 0,
+                "columns": [
+                  "1",
+                  "*",
+                  "* / * / *",
+                  "",
+                  "",
+                  ""
+                ],
+                "text": "1\t*\t* / * / *\t\t\t"
+              },
+              {
+                "index": 1,
+                "columns": [
+                  "2",
+                  "*",
+                  "* / * / *",
+                  "",
+                  "",
+                  ""
+                ],
+                "text": "2\t*\t* / * / *\t\t\t"
+              },
+              {
+                "index": 2,
+                "columns": [
+                  "3",
+                  "*",
+                  "* / * / *",
+                  "",
+                  "",
+                  ""
+                ],
+                "text": "3\t*\t* / * / *\t\t\t"
+              },
+              {
+                "index": 3,
+                "columns": [
+                  "4",
+                  "*",
+                  "* / * / *",
+                  "",
+                  "",
+                  ""
+                ],
+                "text": "4\t*\t* / * / *\t\t\t"
+              },
+              {
+                "index": 4,
+                "columns": [
+                  "5",
+                  "*",
+                  "* / * / *",
+                  "",
+                  "",
+                  ""
+                ],
+                "text": "5\t*\t* / * / *\t\t\t"
+              },
+              {
+                "index": 5,
+                "columns": [
+                  "6",
+                  "*",
+                  "* / * / *",
+                  "",
+                  "",
+                  ""
+                ],
+                "text": "6\t*\t* / * / *\t\t\t"
+              },
+              {
+                "index": 6,
+                "columns": [
+                  "7",
+                  "*",
+                  "* / * / *",
+                  "",
+                  "",
+                  ""
+                ],
+                "text": "7\t*\t* / * / *\t\t\t"
+              },
+              {
+                "index": 7,
+                "columns": [
+                  "8",
+                  "*",
+                  "* / * / *",
+                  "",
+                  "",
+                  ""
+                ],
+                "text": "8\t*\t* / * / *\t\t\t"
+              },
+              {
+                "index": 8,
+                "columns": [
+                  "9",
+                  "*",
+                  "* / * / *",
+                  "",
+                  "",
+                  ""
+                ],
+                "text": "9\t*\t* / * / *\t\t\t"
+              },
+              {
+                "index": 9,
+                "columns": [
+                  "10",
+                  "*",
+                  "* / * / *",
+                  "",
+                  "",
+                  ""
+                ],
+                "text": "10\t*\t* / * / *\t\t\t"
+              },
+              {
+                "index": 10,
+                "columns": [
+                  "11",
+                  "*",
+                  "* / * / *",
+                  "",
+                  "",
+                  ""
+                ],
+                "text": "11\t*\t* / * / *\t\t\t"
+              },
+              {
+                "index": 11,
+                "columns": [
+                  "12",
+                  "*",
+                  "* / * / *",
+                  "",
+                  "",
+                  ""
+                ],
+                "text": "12\t*\t* / * / *\t\t\t"
+              },
+              {
+                "index": 12,
+                "columns": [
+                  "13",
+                  "*",
+                  "* / * / *",
+                  "",
+                  "",
+                  ""
+                ],
+                "text": "13\t*\t* / * / *\t\t\t"
+              },
+              {
+                "index": 13,
+                "columns": [
+                  "14",
+                  "*",
+                  "* / * / *",
+                  "",
+                  "",
+                  ""
+                ],
+                "text": "14\t*\t* / * / *\t\t\t"
+              },
+              {
+                "index": 14,
+                "columns": [
+                  "15",
+                  "*",
+                  "* / * / *",
+                  "",
+                  "",
+                  ""
+                ],
+                "text": "15\t*\t* / * / *\t\t\t"
+              },
+              {
+                "index": 15,
+                "columns": [
+                  "16",
+                  "*",
+                  "* / * / *",
+                  "",
+                  "",
+                  ""
+                ],
+                "text": "16\t*\t* / * / *\t\t\t"
+              },
+              {
+                "index": 16,
+                "columns": [
+                  "17",
+                  "*",
+                  "* / * / *",
+                  "",
+                  "",
+                  ""
+                ],
+                "text": "17\t*\t* / * / *\t\t\t"
+              },
+              {
+                "index": 17,
+                "columns": [
+                  "18",
+                  "*",
+                  "* / * / *",
+                  "",
+                  "",
+                  ""
+                ],
+                "text": "18\t*\t* / * / *\t\t\t"
+              },
+              {
+                "index": 18,
+                "columns": [
+                  "19",
+                  "*",
+                  "* / * / *",
+                  "",
+                  "",
+                  ""
+                ],
+                "text": "19\t*\t* / * / *\t\t\t"
+              },
+              {
+                "index": 19,
+                "columns": [
+                  "20",
+                  "*",
+                  "* / * / *",
+                  "",
+                  "",
+                  ""
+                ],
+                "text": "20\t*\t* / * / *\t\t\t"
+              },
+              {
+                "index": 20,
+                "columns": [
+                  "21",
+                  "*",
+                  "* / * / *",
+                  "",
+                  "",
+                  ""
+                ],
+                "text": "21\t*\t* / * / *\t\t\t"
+              },
+              {
+                "index": 21,
+                "columns": [
+                  "22",
+                  "*",
+                  "* / * / *",
+                  "",
+                  "",
+                  ""
+                ],
+                "text": "22\t*\t* / * / *\t\t\t"
+              },
+              {
+                "index": 22,
+                "columns": [
+                  "23",
+                  "*",
+                  "* / * / *",
+                  "",
+                  "",
+                  ""
+                ],
+                "text": "23\t*\t* / * / *\t\t\t"
+              },
+              {
+                "index": 23,
+                "columns": [
+                  "24",
+                  "*",
+                  "* / * / *",
+                  "",
+                  "",
+                  ""
+                ],
+                "text": "24\t*\t* / * / *\t\t\t"
+              },
+              {
+                "index": 24,
+                "columns": [
+                  "25",
+                  "*",
+                  "* / * / *",
+                  "",
+                  "",
+                  ""
+                ],
+                "text": "25\t*\t* / * / *\t\t\t"
+              },
+              {
+                "index": 25,
+                "columns": [
+                  "26",
+                  "*",
+                  "* / * / *",
+                  "",
+                  "",
+                  ""
+                ],
+                "text": "26\t*\t* / * / *\t\t\t"
+              },
+              {
+                "index": 26,
+                "columns": [
+                  "27",
+                  "*",
+                  "* / * / *",
+                  "",
+                  "",
+                  ""
+                ],
+                "text": "27\t*\t* / * / *\t\t\t"
+              },
+              {
+                "index": 27,
+                "columns": [
+                  "28",
+                  "*",
+                  "* / * / *",
+                  "",
+                  "",
+                  ""
+                ],
+                "text": "28\t*\t* / * / *\t\t\t"
+              },
+              {
+                "index": 28,
+                "columns": [
+                  "29",
+                  "*",
+                  "* / * / *",
+                  "",
+                  "",
+                  ""
+                ],
+                "text": "29\t*\t* / * / *\t\t\t"
+              },
+              {
+                "index": 29,
+                "columns": [
+                  "30",
+                  "*",
+                  "* / * / *",
+                  "",
+                  "",
+                  ""
+                ],
+                "text": "30\t*\t* / * / *\t\t\t"
+              }
+            ]
+          }
+        },
+        {
+          "scenario": "trace-mixed",
+          "target": "1.1.1.1",
+          "status": "inconclusive",
+          "reason": "BestTrace completed without a responding target",
+          "tun_error_restoration": {
+            "required": false,
+            "passed": false,
+            "routers": [],
+            "reason": null
+          },
+          "gui": {
+            "status": "inconclusive",
+            "trace_completed": true,
+            "browser_ready": true,
+            "preparation_recovered": false,
+            "rows": [
+              {
+                "index": 0,
+                "columns": [
+                  "1",
+                  "*",
+                  "* / * / *",
+                  "",
+                  "",
+                  ""
+                ],
+                "text": "1\t*\t* / * / *\t\t\t"
+              },
+              {
+                "index": 1,
+                "columns": [
+                  "2",
+                  "*",
+                  "* / * / *",
+                  "",
+                  "",
+                  ""
+                ],
+                "text": "2\t*\t* / * / *\t\t\t"
+              },
+              {
+                "index": 2,
+                "columns": [
+                  "3",
+                  "*",
+                  "* / * / *",
+                  "",
+                  "",
+                  ""
+                ],
+                "text": "3\t*\t* / * / *\t\t\t"
+              },
+              {
+                "index": 3,
+                "columns": [
+                  "4",
+                  "*",
+                  "* / * / *",
+                  "",
+                  "",
+                  ""
+                ],
+                "text": "4\t*\t* / * / *\t\t\t"
+              },
+              {
+                "index": 4,
+                "columns": [
+                  "5",
+                  "*",
+                  "* / * / *",
+                  "",
+                  "",
+                  ""
+                ],
+                "text": "5\t*\t* / * / *\t\t\t"
+              },
+              {
+                "index": 5,
+                "columns": [
+                  "6",
+                  "*",
+                  "* / * / *",
+                  "",
+                  "",
+                  ""
+                ],
+                "text": "6\t*\t* / * / *\t\t\t"
+              },
+              {
+                "index": 6,
+                "columns": [
+                  "7",
+                  "*",
+                  "* / * / *",
+                  "",
+                  "",
+                  ""
+                ],
+                "text": "7\t*\t* / * / *\t\t\t"
+              },
+              {
+                "index": 7,
+                "columns": [
+                  "8",
+                  "*",
+                  "* / * / *",
+                  "",
+                  "",
+                  ""
+                ],
+                "text": "8\t*\t* / * / *\t\t\t"
+              },
+              {
+                "index": 8,
+                "columns": [
+                  "9",
+                  "*",
+                  "* / * / *",
+                  "",
+                  "",
+                  ""
+                ],
+                "text": "9\t*\t* / * / *\t\t\t"
+              },
+              {
+                "index": 9,
+                "columns": [
+                  "10",
+                  "*",
+                  "* / * / *",
+                  "",
+                  "",
+                  ""
+                ],
+                "text": "10\t*\t* / * / *\t\t\t"
+              },
+              {
+                "index": 10,
+                "columns": [
+                  "11",
+                  "*",
+                  "* / * / *",
+                  "",
+                  "",
+                  ""
+                ],
+                "text": "11\t*\t* / * / *\t\t\t"
+              },
+              {
+                "index": 11,
+                "columns": [
+                  "12",
+                  "*",
+                  "* / * / *",
+                  "",
+                  "",
+                  ""
+                ],
+                "text": "12\t*\t* / * / *\t\t\t"
+              },
+              {
+                "index": 12,
+                "columns": [
+                  "13",
+                  "*",
+                  "* / * / *",
+                  "",
+                  "",
+                  ""
+                ],
+                "text": "13\t*\t* / * / *\t\t\t"
+              },
+              {
+                "index": 13,
+                "columns": [
+                  "14",
+                  "*",
+                  "* / * / *",
+                  "",
+                  "",
+                  ""
+                ],
+                "text": "14\t*\t* / * / *\t\t\t"
+              },
+              {
+                "index": 14,
+                "columns": [
+                  "15",
+                  "*",
+                  "* / * / *",
+                  "",
+                  "",
+                  ""
+                ],
+                "text": "15\t*\t* / * / *\t\t\t"
+              },
+              {
+                "index": 15,
+                "columns": [
+                  "16",
+                  "*",
+                  "* / * / *",
+                  "",
+                  "",
+                  ""
+                ],
+                "text": "16\t*\t* / * / *\t\t\t"
+              },
+              {
+                "index": 16,
+                "columns": [
+                  "17",
+                  "*",
+                  "* / * / *",
+                  "",
+                  "",
+                  ""
+                ],
+                "text": "17\t*\t* / * / *\t\t\t"
+              },
+              {
+                "index": 17,
+                "columns": [
+                  "18",
+                  "*",
+                  "* / * / *",
+                  "",
+                  "",
+                  ""
+                ],
+                "text": "18\t*\t* / * / *\t\t\t"
+              },
+              {
+                "index": 18,
+                "columns": [
+                  "19",
+                  "*",
+                  "* / * / *",
+                  "",
+                  "",
+                  ""
+                ],
+                "text": "19\t*\t* / * / *\t\t\t"
+              },
+              {
+                "index": 19,
+                "columns": [
+                  "20",
+                  "*",
+                  "* / * / *",
+                  "",
+                  "",
+                  ""
+                ],
+                "text": "20\t*\t* / * / *\t\t\t"
+              },
+              {
+                "index": 20,
+                "columns": [
+                  "21",
+                  "*",
+                  "* / * / *",
+                  "",
+                  "",
+                  ""
+                ],
+                "text": "21\t*\t* / * / *\t\t\t"
+              },
+              {
+                "index": 21,
+                "columns": [
+                  "22",
+                  "*",
+                  "* / * / *",
+                  "",
+                  "",
+                  ""
+                ],
+                "text": "22\t*\t* / * / *\t\t\t"
+              },
+              {
+                "index": 22,
+                "columns": [
+                  "23",
+                  "*",
+                  "* / * / *",
+                  "",
+                  "",
+                  ""
+                ],
+                "text": "23\t*\t* / * / *\t\t\t"
+              },
+              {
+                "index": 23,
+                "columns": [
+                  "24",
+                  "*",
+                  "* / * / *",
+                  "",
+                  "",
+                  ""
+                ],
+                "text": "24\t*\t* / * / *\t\t\t"
+              },
+              {
+                "index": 24,
+                "columns": [
+                  "25",
+                  "*",
+                  "* / * / *",
+                  "",
+                  "",
+                  ""
+                ],
+                "text": "25\t*\t* / * / *\t\t\t"
+              },
+              {
+                "index": 25,
+                "columns": [
+                  "26",
+                  "*",
+                  "* / * / *",
+                  "",
+                  "",
+                  ""
+                ],
+                "text": "26\t*\t* / * / *\t\t\t"
+              },
+              {
+                "index": 26,
+                "columns": [
+                  "27",
+                  "*",
+                  "* / * / *",
+                  "",
+                  "",
+                  ""
+                ],
+                "text": "27\t*\t* / * / *\t\t\t"
+              },
+              {
+                "index": 27,
+                "columns": [
+                  "28",
+                  "*",
+                  "* / * / *",
+                  "",
+                  "",
+                  ""
+                ],
+                "text": "28\t*\t* / * / *\t\t\t"
+              },
+              {
+                "index": 28,
+                "columns": [
+                  "29",
+                  "*",
+                  "* / * / *",
+                  "",
+                  "",
+                  ""
+                ],
+                "text": "29\t*\t* / * / *\t\t\t"
+              },
+              {
+                "index": 29,
+                "columns": [
+                  "30",
+                  "*",
+                  "* / * / *",
+                  "",
+                  "",
+                  ""
+                ],
+                "text": "30\t*\t* / * / *\t\t\t"
+              }
+            ]
+          }
+        },
+        {
+          "scenario": "trace-gvisor",
+          "target": "1.1.1.1",
+          "status": "inconclusive",
+          "reason": "BestTrace completed without a responding target",
+          "tun_error_restoration": {
+            "required": false,
+            "passed": false,
+            "routers": [],
+            "reason": null
+          },
+          "gui": {
+            "status": "inconclusive",
+            "trace_completed": true,
+            "browser_ready": true,
+            "preparation_recovered": false,
+            "rows": [
+              {
+                "index": 0,
+                "columns": [
+                  "1",
+                  "*",
+                  "* / * / *",
+                  "",
+                  "",
+                  ""
+                ],
+                "text": "1\t*\t* / * / *\t\t\t"
+              },
+              {
+                "index": 1,
+                "columns": [
+                  "2",
+                  "*",
+                  "* / * / *",
+                  "",
+                  "",
+                  ""
+                ],
+                "text": "2\t*\t* / * / *\t\t\t"
+              },
+              {
+                "index": 2,
+                "columns": [
+                  "3",
+                  "*",
+                  "* / * / *",
+                  "",
+                  "",
+                  ""
+                ],
+                "text": "3\t*\t* / * / *\t\t\t"
+              },
+              {
+                "index": 3,
+                "columns": [
+                  "4",
+                  "*",
+                  "* / * / *",
+                  "",
+                  "",
+                  ""
+                ],
+                "text": "4\t*\t* / * / *\t\t\t"
+              },
+              {
+                "index": 4,
+                "columns": [
+                  "5",
+                  "*",
+                  "* / * / *",
+                  "",
+                  "",
+                  ""
+                ],
+                "text": "5\t*\t* / * / *\t\t\t"
+              },
+              {
+                "index": 5,
+                "columns": [
+                  "6",
+                  "*",
+                  "* / * / *",
+                  "",
+                  "",
+                  ""
+                ],
+                "text": "6\t*\t* / * / *\t\t\t"
+              },
+              {
+                "index": 6,
+                "columns": [
+                  "7",
+                  "*",
+                  "* / * / *",
+                  "",
+                  "",
+                  ""
+                ],
+                "text": "7\t*\t* / * / *\t\t\t"
+              },
+              {
+                "index": 7,
+                "columns": [
+                  "8",
+                  "*",
+                  "* / * / *",
+                  "",
+                  "",
+                  ""
+                ],
+                "text": "8\t*\t* / * / *\t\t\t"
+              },
+              {
+                "index": 8,
+                "columns": [
+                  "9",
+                  "*",
+                  "* / * / *",
+                  "",
+                  "",
+                  ""
+                ],
+                "text": "9\t*\t* / * / *\t\t\t"
+              },
+              {
+                "index": 9,
+                "columns": [
+                  "10",
+                  "*",
+                  "* / * / *",
+                  "",
+                  "",
+                  ""
+                ],
+                "text": "10\t*\t* / * / *\t\t\t"
+              },
+              {
+                "index": 10,
+                "columns": [
+                  "11",
+                  "*",
+                  "* / * / *",
+                  "",
+                  "",
+                  ""
+                ],
+                "text": "11\t*\t* / * / *\t\t\t"
+              },
+              {
+                "index": 11,
+                "columns": [
+                  "12",
+                  "*",
+                  "* / * / *",
+                  "",
+                  "",
+                  ""
+                ],
+                "text": "12\t*\t* / * / *\t\t\t"
+              },
+              {
+                "index": 12,
+                "columns": [
+                  "13",
+                  "*",
+                  "* / * / *",
+                  "",
+                  "",
+                  ""
+                ],
+                "text": "13\t*\t* / * / *\t\t\t"
+              },
+              {
+                "index": 13,
+                "columns": [
+                  "14",
+                  "*",
+                  "* / * / *",
+                  "",
+                  "",
+                  ""
+                ],
+                "text": "14\t*\t* / * / *\t\t\t"
+              },
+              {
+                "index": 14,
+                "columns": [
+                  "15",
+                  "*",
+                  "* / * / *",
+                  "",
+                  "",
+                  ""
+                ],
+                "text": "15\t*\t* / * / *\t\t\t"
+              },
+              {
+                "index": 15,
+                "columns": [
+                  "16",
+                  "*",
+                  "* / * / *",
+                  "",
+                  "",
+                  ""
+                ],
+                "text": "16\t*\t* / * / *\t\t\t"
+              },
+              {
+                "index": 16,
+                "columns": [
+                  "17",
+                  "*",
+                  "* / * / *",
+                  "",
+                  "",
+                  ""
+                ],
+                "text": "17\t*\t* / * / *\t\t\t"
+              },
+              {
+                "index": 17,
+                "columns": [
+                  "18",
+                  "*",
+                  "* / * / *",
+                  "",
+                  "",
+                  ""
+                ],
+                "text": "18\t*\t* / * / *\t\t\t"
+              },
+              {
+                "index": 18,
+                "columns": [
+                  "19",
+                  "*",
+                  "* / * / *",
+                  "",
+                  "",
+                  ""
+                ],
+                "text": "19\t*\t* / * / *\t\t\t"
+              },
+              {
+                "index": 19,
+                "columns": [
+                  "20",
+                  "*",
+                  "* / * / *",
+                  "",
+                  "",
+                  ""
+                ],
+                "text": "20\t*\t* / * / *\t\t\t"
+              },
+              {
+                "index": 20,
+                "columns": [
+                  "21",
+                  "*",
+                  "* / * / *",
+                  "",
+                  "",
+                  ""
+                ],
+                "text": "21\t*\t* / * / *\t\t\t"
+              },
+              {
+                "index": 21,
+                "columns": [
+                  "22",
+                  "*",
+                  "* / * / *",
+                  "",
+                  "",
+                  ""
+                ],
+                "text": "22\t*\t* / * / *\t\t\t"
+              },
+              {
+                "index": 22,
+                "columns": [
+                  "23",
+                  "*",
+                  "* / * / *",
+                  "",
+                  "",
+                  ""
+                ],
+                "text": "23\t*\t* / * / *\t\t\t"
+              },
+              {
+                "index": 23,
+                "columns": [
+                  "24",
+                  "*",
+                  "* / * / *",
+                  "",
+                  "",
+                  ""
+                ],
+                "text": "24\t*\t* / * / *\t\t\t"
+              },
+              {
+                "index": 24,
+                "columns": [
+                  "25",
+                  "*",
+                  "* / * / *",
+                  "",
+                  "",
+                  ""
+                ],
+                "text": "25\t*\t* / * / *\t\t\t"
+              },
+              {
+                "index": 25,
+                "columns": [
+                  "26",
+                  "*",
+                  "* / * / *",
+                  "",
+                  "",
+                  ""
+                ],
+                "text": "26\t*\t* / * / *\t\t\t"
+              },
+              {
+                "index": 26,
+                "columns": [
+                  "27",
+                  "*",
+                  "* / * / *",
+                  "",
+                  "",
+                  ""
+                ],
+                "text": "27\t*\t* / * / *\t\t\t"
+              },
+              {
+                "index": 27,
+                "columns": [
+                  "28",
+                  "*",
+                  "* / * / *",
+                  "",
+                  "",
+                  ""
+                ],
+                "text": "28\t*\t* / * / *\t\t\t"
+              },
+              {
+                "index": 28,
+                "columns": [
+                  "29",
+                  "*",
+                  "* / * / *",
+                  "",
+                  "",
+                  ""
+                ],
+                "text": "29\t*\t* / * / *\t\t\t"
+              },
+              {
+                "index": 29,
+                "columns": [
+                  "30",
+                  "*",
+                  "* / * / *",
+                  "",
+                  "",
+                  ""
+                ],
+                "text": "30\t*\t* / * / *\t\t\t"
+              }
+            ]
+          }
+        }
+      ]
+    }
+  }
+}
